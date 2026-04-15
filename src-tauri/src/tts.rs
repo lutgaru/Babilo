@@ -235,20 +235,36 @@ impl TtsEngine {
         let lat_shape = vec![1usize, latent_dim, latent_len];
         let mask_shape = vec![1usize, 1usize, latent_len];
 
-        // ── 7. Denoising loop (flow matching) ─────────────────────────────
+        // ── 7. Denoising loop OPTIMIZADO ─────────────────────────────
+        // Pre-convertir tensors que NO cambian (fuera del loop)
+        let text_emb_tensor = Tensor::from_array((emb_shape.clone(), emb_flat.clone()))?;
+        let style_ttl_tensor = Tensor::from_array((ttl_dims.clone(), ttl_flat.clone()))?;
+        let text_mask_tensor =
+            Tensor::from_array(([1usize, 1usize, token_len], text_mask.clone()))?;
+        let mut current_step_tensor = Tensor::from_array(([1usize], vec![0.0f32]))?; // Reutilizar buffer
+        let total_step_tensor = Tensor::from_array(([1usize], vec![total_steps as f32]))?;
+
+        // Buffer reutilizable para noisy_latent (evitar realloc)
+        let mut latent_buffer = vec![0.0f32; latent_total];
+
         for step in 0..total_steps {
+            // Actualizar solo el valor del step actual
+            current_step_tensor.try_extract_array_mut::<f32>()?[0] = step as f32;
+
+            // Crear tensor de noisy_latent SIN clone del Vec (usar referencia)
             let out = self.vector_estimator.run(inputs![
-                "noisy_latent" => Tensor::from_array((lat_shape.clone(), noisy_latent.clone()))?,
-                "text_emb"     => Tensor::from_array((emb_shape.clone(), emb_flat.clone()))?,
-                "style_ttl"    => Tensor::from_array((ttl_dims.clone(), ttl_flat.clone()))?,
+                "noisy_latent" => Tensor::from_array((lat_shape.clone(), noisy_latent.clone()))?,  // ← Este sí necesita clone por mutabilidad
+                "text_emb"     => &text_emb_tensor,    // ✅ Referencia, no clone
+                "style_ttl"    => &style_ttl_tensor,   // ✅ Referencia
                 "latent_mask"  => Tensor::from_array((mask_shape.clone(), latent_mask.clone()))?,
-                "text_mask"    => Tensor::from_array(([1usize, 1usize, token_len], text_mask.clone()))?,
-                "current_step" => Tensor::from_array(([1usize], vec![step as f32]))?,
-                "total_step"   => Tensor::from_array(([1usize], vec![total_steps as f32]))?,
+                "text_mask"    => &text_mask_tensor,   // ✅ Referencia
+                "current_step" => &current_step_tensor,// ✅ Referencia
+                "total_step"   => &total_step_tensor,  // ✅ Referencia
             ])?;
 
+            // Extraer directamente al buffer reutilizable
             let pred = out["denoised_latent"].try_extract_array::<f32>()?;
-            noisy_latent = pred.iter().copied().collect();
+            noisy_latent.copy_from_slice(pred.as_slice().unwrap()); // ✅ memcpy en lugar de iter+collect
         }
 
         // ── 8. Vocoder ────────────────────────────────────────────────────

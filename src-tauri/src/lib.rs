@@ -1,9 +1,9 @@
 mod tts;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use tauri::http::Response;
 use tauri::Manager;
 use tts::TtsEngine;
-use tauri::http::Response;
 // Estado global del engine (se inicializa una vez)
 pub struct AppState {
     engine: Mutex<Option<TtsEngine>>,
@@ -25,17 +25,19 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 fn synthesize(
-    text: String, 
-    voice: Option<String>, 
-    state: tauri::State<AppState>
-) -> Result<Vec<i8>, String> {  // ← Retornar Vec<i8>
+    text: String,
+    voice: Option<String>,
+    state: tauri::State<AppState>,
+) -> Result<Vec<i8>, String> {
+    // ← Retornar Vec<i8>
     let voice_id = voice.unwrap_or_else(|| "F1".to_string());
     let mut engine_lock = state.engine.lock().map_err(|e| e.to_string())?;
-
+    const DENOISING_STEPS: usize = 30;
     match engine_lock.as_mut() {
         None => Err("Engine no inicializado".into()),
-        Some(engine) => engine.speak(&text, &voice_id, "en", 1.0, 22050)
-            .map_err(|e| e.to_string()),  // ← Propagar error como String
+        Some(engine) => engine
+            .speak(&text, &voice_id, "en", 1.0, DENOISING_STEPS)
+            .map_err(|e| e.to_string()), // ← Propagar error como String
     }
 }
 
