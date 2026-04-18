@@ -1,17 +1,16 @@
 // ── Imports ──────────────────────────────────────────────────────────────
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;  // ✅ Asegurar que Mutex está importado
-use tauri::{State, Manager};  // ✅ Agregar Manager aquí
-
+use std::sync::Mutex; // ✅ Asegurar que Mutex está importado
+use tauri::{Manager, State}; // ✅ Agregar Manager aquí
 
 // Tus módulos
-mod tts;  // ← Tu módulo TTS existente
 mod audio;
 mod llama;
+mod tts; // ← Tu módulo TTS existente
 
 use audio::{AudioCapture, AudioConfig, MelPreprocessor};
 use llama::AudioLLM;
-use tts::TtsEngine;  // ← Ajusta según tu estructura real de tts.rs
+use tts::TtsEngine; // ← Ajusta según tu estructura real de tts.rs
 
 // ── AppState GLOBAL ─────────────────────────────────────────────────────
 pub struct AppState {
@@ -46,7 +45,7 @@ fn synthesize(
     // ✅ Desencadenar Arc<Mutex<>> correctamente
     let mut engine_lock = state.tts_engine.lock().map_err(|e| e.to_string())?;
     const DENOISING_STEPS: usize = 30;
-    
+
     match engine_lock.as_mut() {
         None => Err("Engine no inicializado".into()),
         Some(engine) => engine
@@ -76,10 +75,7 @@ async fn start_listening(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn stop_and_process(
-    prompt: String,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
+async fn stop_and_process(prompt: String, state: State<'_, AppState>) -> Result<String, String> {
     // Detener captura
     {
         let capture_lock = state.audio_capture.lock().map_err(|e| e.to_string())?;
@@ -87,7 +83,7 @@ async fn stop_and_process(
             cap.stop();
         }
     }
-    
+
     // Obtener audio
     let audio = {
         let capture_lock = state.audio_capture.lock().map_err(|e| e.to_string())?;
@@ -97,7 +93,7 @@ async fn stop_and_process(
             return Err("No audio captured".into());
         }
     };
-    
+
     // Preprocesar
     let config = AudioConfig {
         sample_rate: 16000,
@@ -108,15 +104,28 @@ async fn stop_and_process(
         hop_size: 160,
     };
     let mel_chunks = state.preprocessor.process(&audio, &config);
-    
+
     // Inferir (placeholder hasta que llama.cpp soporte Gemma 4 audio nativo)
     let mut llm_lock = state.audio_llm.lock().map_err(|e| e.to_string())?;
     if let Some(ref mut model) = *llm_lock {
-        model.infer(mel_chunks, &prompt)
+        model
+            .infer(mel_chunks, &prompt)
             .map_err(|e| format!("Inference error: {}", e))
     } else {
         // 🔧 Fallback: retornar el prompt como eco si no hay LLM
         Ok(format!("[Echo] {}", prompt))
+    }
+}
+
+#[tauri::command]
+async fn test_inference(state: State<'_, AppState>, test_prompt: String) -> Result<String, String> {
+    let mut llm_lock = state.audio_llm.lock().map_err(|e| e.to_string())?;
+    if let Some(ref mut model) = *llm_lock {
+        model
+            .infer(vec![], test_prompt.as_str())
+            .map_err(|e| format!("Inference error: {}", e))
+    } else {
+        Ok("No LLM model available".into())
     }
 }
 
@@ -127,21 +136,22 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet, 
-            synthesize, 
+            greet,
+            synthesize,
             list_voices,
             start_listening,
             stop_and_process,
+            test_inference,
         ])
         .setup(|app| {
             let preprocessor = MelPreprocessor::new(16000, 128, 512);
-            
+
             // ✅ AudioLLM puede fallar, es opcional
             let model_path = AudioLLM::models_dir().join("gemma-4-E4B-it-Q4_0.gguf");
             let audio_llm = AudioLLM::new(&model_path).ok();
-            
+
             let audio_capture = AudioCapture::new().ok();
-            
+
             // ✅ Usar app.handle() en Tauri 2 (no app_handle)
             let engine = match TtsEngine::new(tts::assets_dir(), app.handle().clone()) {
                 Ok(e) => {
@@ -153,7 +163,7 @@ pub fn run() {
                     None
                 }
             };
-            
+
             // ✅ Usar Mutex directamente en el estado compartido
             app.manage(AppState {
                 tts_engine: Mutex::new(engine),
@@ -161,13 +171,13 @@ pub fn run() {
                 audio_llm: Mutex::new(audio_llm),
                 preprocessor,
             });
-            
+
             // ✅ Usar get_webview_window desde Manager
             if let Some(window) = app.get_webview_window("main") {
                 println!("🪟 Ventana: {:?}", window.url());
                 window.show().unwrap();
             }
-            
+
             Ok(())
         })
         .run(tauri::generate_context!())

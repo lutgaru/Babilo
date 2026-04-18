@@ -12,26 +12,26 @@ async function toggleRecording() {
   if (!isRecording) {
     // Iniciar captura
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { 
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
           sampleRate: 16000,  // Coincidir con config Rust
           channelCount: 1,
-          echoCancellation: true 
-        } 
+          echoCancellation: true
+        }
       });
-      
+
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm;codecs=pcm',
         audioBitsPerSecond: 256000
       });
-      
+
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.start(100); // Colectar cada 100ms
-      
+
       await invoke('start_listening');
       isRecording = true;
       document.getElementById('mic-btn').classList.add('recording');
-      
+
     } catch (err) {
       console.error('❌ Error mic:', err);
     }
@@ -39,22 +39,22 @@ async function toggleRecording() {
     // Detener y procesar
     mediaRecorder?.stop();
     mediaRecorder?.stream?.getTracks().forEach(t => t.stop());
-    
+
     const prompt = document.getElementById('greet-input').value;
     document.getElementById('greet-msg').textContent = "🔄 Procesando audio...";
-    
+
     try {
       const response = await invoke('stop_and_process', { prompt });
       document.getElementById('greet-msg').textContent = response;
-      
+
       // Opcional: TTS de la respuesta
       await speak(response);
-      
+
     } catch (err) {
       console.error('❌ Error processing:', err);
       document.getElementById('greet-msg').textContent = `Error: ${err}`;
     }
-    
+
     audioChunks = [];
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
@@ -73,18 +73,18 @@ async function speak(text) {
     // 🔑 Convertir i8 (con signo) → u8 (sin signo) para el Blob
     // En JS, los bytes negativos deben sumarse 256 para obtener su valor u8 equivalente
     const uint8 = new Uint8Array(wavBytes.map(b => b < 0 ? b + 256 : b));
-    
+
     // Debug: verificar header WAV
     if (uint8.length < 44) throw new Error(`Datos muy cortos: ${uint8.length} bytes`);
     const header = new TextDecoder().decode(uint8.slice(0, 4));
     if (header !== "RIFF") throw new Error(`Header inválido: "${header}"`);
-    
+
     greetMsgEl.textContent = "▶ Reproduciendo...";
     const blob = new Blob([uint8], { type: "audio/wav" });
     const audioUrl = URL.createObjectURL(blob);
-    
+
     const audio = new Audio(audioUrl);
-    
+
     audio.onloadeddata = () => console.log("✅ Audio cargado:", audio.duration, "s");
     audio.onerror = (e) => {
       URL.revokeObjectURL(audioUrl);
@@ -95,9 +95,9 @@ async function speak(text) {
       URL.revokeObjectURL(audioUrl);
       greetMsgEl.textContent = "✓ Listo";
     };
-    
+
     await audio.play();
-    
+
   } catch (err) {
     console.error("❌ Error general:", err);
     greetMsgEl.textContent = `Error: ${err.message || JSON.stringify(err)}`;
@@ -109,8 +109,14 @@ async function speak(text) {
 async function greet() {
   const text = greetInputEl.value;
   // Muestra el mensaje Y lo habla
-  greetMsgEl.textContent = await invoke("greet", { name: text });
-  await speak(text);
+  try {
+    const testresponse = await invoke("test_inference", { testPrompt: text });
+    await speak(testresponse);
+  } catch (err) {
+    console.error("❌ Error test_inference:", err);
+    greetMsgEl.textContent = `Error: ${err.message || JSON.stringify(err)}`;
+  }
+  // greetMsgEl.textContent = await invoke("greet", { name: text });
 }
 
 window.addEventListener("DOMContentLoaded", () => {
