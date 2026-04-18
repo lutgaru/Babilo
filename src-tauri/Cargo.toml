@@ -18,13 +18,32 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+# Tauri
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
+
+# Serialización
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# Audio
+cpal = "0.15"
+rubato = "0.15"
+hound = "3.5"
+
+# Procesamiento numérico
+ndarray = "0.15"
+ndarray-rand = "0.14"
+realfft = "3.4"
+
+# llama.cpp (versión compatible)
+llama-cpp-2 = "0.1"
+
+# Utilidades
 rand = "0.10.1"
 rand_distr = "0.6.0"
+tracing = "0.1"
+byteorder = "1.5"
 
-# Supertonic / ONNX
+# Tu motor TTS (ort/Supertonic)
 ort = { version = "2.0.0-rc.9", features = ["download-binaries"] }
-hound = "3.5"
