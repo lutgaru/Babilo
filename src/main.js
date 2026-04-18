@@ -3,6 +3,64 @@ const { invoke } = window.__TAURI__.core;
 let greetInputEl;
 let greetMsgEl;
 
+let isRecording = false;
+let mediaRecorder = null;
+let audioChunks = [];
+
+// ── Control de Micrófono ─────────────────────────────────────────────
+async function toggleRecording() {
+  if (!isRecording) {
+    // Iniciar captura
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { 
+          sampleRate: 16000,  // Coincidir con config Rust
+          channelCount: 1,
+          echoCancellation: true 
+        } 
+      });
+      
+      mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=pcm',
+        audioBitsPerSecond: 256000
+      });
+      
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.start(100); // Colectar cada 100ms
+      
+      await invoke('start_listening');
+      isRecording = true;
+      document.getElementById('mic-btn').classList.add('recording');
+      
+    } catch (err) {
+      console.error('❌ Error mic:', err);
+    }
+  } else {
+    // Detener y procesar
+    mediaRecorder?.stop();
+    mediaRecorder?.stream?.getTracks().forEach(t => t.stop());
+    
+    const prompt = document.getElementById('greet-input').value;
+    document.getElementById('greet-msg').textContent = "🔄 Procesando audio...";
+    
+    try {
+      const response = await invoke('stop_and_process', { prompt });
+      document.getElementById('greet-msg').textContent = response;
+      
+      // Opcional: TTS de la respuesta
+      await speak(response);
+      
+    } catch (err) {
+      console.error('❌ Error processing:', err);
+      document.getElementById('greet-msg').textContent = `Error: ${err}`;
+    }
+    
+    audioChunks = [];
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
+  }
+}
+
 // ── TTS ───────────────────────────────────────────────────────────────────────
 
 async function speak(text) {
@@ -62,4 +120,10 @@ window.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     greet();
   });
+  // Agregar botón de mic
+  const micBtn = document.createElement('button');
+  micBtn.id = 'mic-btn';
+  micBtn.innerHTML = '🎤';
+  micBtn.onclick = toggleRecording;
+  document.querySelector('.row').appendChild(micBtn);
 });
