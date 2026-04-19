@@ -152,11 +152,10 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 
   // ✅ Botón de micrófono
-  const micBtn = document.createElement('button');
-  micBtn.id = 'mic-btn';
-  micBtn.innerHTML = '🎤';
-  micBtn.onclick = toggleRecording;
-  document.querySelector('.row').appendChild(micBtn);
+  const micBtn = document.getElementById('mic-btn');
+  if (micBtn) {
+    micBtn.onclick = toggleRecording
+  }
 
   // ✅ Botón para refrescar dispositivos
   const refreshBtn = document.getElementById('refresh-mics');
