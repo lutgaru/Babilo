@@ -2,18 +2,23 @@ use llama_cpp_2::{
     context::params::LlamaContextParams,
     llama_backend::LlamaBackend,
     llama_batch::LlamaBatch,
-    model::{params::LlamaModelParams, AddBos, LlamaModel}, // ← removed Special
-    sampling::LlamaSampler,                                // ← added
+    model::{params::LlamaModelParams, AddBos, LlamaModel},
+    mtmd::MtmdContext,
+    sampling::LlamaSampler, // ← added
 };
 use ndarray::Array2;
-use std::num::NonZeroU32;
 use std::path::Path;
 use std::sync::OnceLock;
+use std::{num::NonZeroU32, sync::Mutex};
 
 static BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
 
 fn get_backend() -> &'static LlamaBackend {
-    BACKEND.get_or_init(|| LlamaBackend::init().expect("Failed to init llama backend"))
+    BACKEND.get_or_init(|| {
+        let mut backend = LlamaBackend::init().expect("Failed to init llama backend");
+        backend.void_logs(); // ← ¡Esto silencia los logs de llama.cpp!
+        backend
+    })
 }
 
 pub struct AudioLLM {
@@ -21,14 +26,17 @@ pub struct AudioLLM {
     model: LlamaModel,
     ctx_params: LlamaContextParams,
     audio_embed_dim: usize,
+    mtmd_context: Mutex<Option<MtmdContext>>,
 }
 
 impl AudioLLM {
-    pub fn new(model_path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(
+        model_path: &Path,
+        mmproj_path: Option<&Path>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
         let backend = get_backend();
 
         let params = LlamaModelParams::default().with_n_gpu_layers(0);
-
         let model = LlamaModel::load_from_file(backend, model_path, &params)?;
 
         let ctx_params = LlamaContextParams::default()
@@ -37,10 +45,22 @@ impl AudioLLM {
             .with_n_ubatch(512)
             .with_n_seq_max(1);
 
+        // ↓ Cargar mmproj aquí si se proporciona la ruta
+        let mtmd_context = if let Some(mmproj) = mmproj_path {
+            let params = llama_cpp_2::mtmd::MtmdContextParams::default();
+            let ctx =
+                MtmdContext::init_from_file(mmproj.to_string_lossy().as_ref(), &model, &params)
+                    .map_err(|e| format!("Failed to init MTMD context: {}", e))?;
+            Mutex::new(Some(ctx))
+        } else {
+            Mutex::new(None)
+        };
+
         Ok(Self {
             model,
             ctx_params,
             audio_embed_dim: 2304,
+            mtmd_context, // ← guardar el contexto cargado
         })
     }
 
@@ -135,36 +155,24 @@ impl AudioLLM {
     pub fn infer_audio(
         &mut self,
         audio_pcm: &[f32],
-        mmproj_path: &str,
+        // mmproj_path ya no es necesario aquí ↓
         prompt: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
-        use llama_cpp_2::mtmd::{
-            mtmd_default_marker, MtmdBitmap, MtmdContext, MtmdContextParams, MtmdInputText,
-        };
+        use llama_cpp_2::mtmd::{mtmd_default_marker, MtmdBitmap, MtmdInputText};
 
         let backend = get_backend();
 
-        eprintln!(
-            "🔊 infer_audio START — {} samples, mmproj: {}",
-            audio_pcm.len(),
-            mmproj_path
-        );
+        // ↓ Obtener referencia al contexto ya cargado
+        let mtmd_ctx_guard = self
+            .mtmd_context
+            .lock()
+            .map_err(|e| format!("Poisoned lock: {}", e))?;
 
-        // ── 1. MTMD context ───────────────────────────────────────────────────
-        eprintln!("  [1] Creando MtmdContext...");
-        let mtmd_params = MtmdContextParams::default();
-        let mtmd_ctx = MtmdContext::init_from_file(mmproj_path, &self.model, &mtmd_params)
-            .map_err(|e| format!("Failed to init MTMD context: {}", e))?;
-        eprintln!("  [1] ✅ MtmdContext creado");
-        eprintln!(
-            "       support_audio={}, sample_rate={:?}",
-            mtmd_ctx.support_audio(),
-            mtmd_ctx.get_audio_sample_rate()
-        );
+        let mtmd_ctx = mtmd_ctx_guard
+            .as_ref()
+            .ok_or("MtmdContext no inicializado — ¿olvidaste pasar mmproj_path en new()?")?;
 
-        // if !mtmd_ctx.support_audio() {
-        //     return Err("Modelo no soporta audio — ¿es el mmproj correcto para Gemma 4 audio?".into());
-        // }
+        eprintln!("🔊 infer_audio START — {} samples", audio_pcm.len());
 
         // ── 2. Audio bitmap ───────────────────────────────────────────────────
         eprintln!(

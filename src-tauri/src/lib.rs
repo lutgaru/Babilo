@@ -253,7 +253,7 @@ async fn stop_and_process(prompt: String, state: State<'_, AppState>) -> Result<
         println!("✅ mmproj encontrado, usando infer_audio");
 
         model
-            .infer_audio(&resampled_audio, &mmproj_path.to_string_lossy(), &prompt)
+            .infer_audio(&resampled_audio, &prompt) // ← solo 2 parámetros ahora
             .map_err(|e| format!("infer_audio error: {}", e))
     } else {
         // ── Fallback: usar infer() de texto con el prompt del usuario ─────
@@ -296,7 +296,16 @@ pub fn run() {
             let preprocessor = MelPreprocessor::new(16000, 128, 512);
 
             let model_path = AudioLLM::models_dir().join("gemma-4-E4B-it-Q4_0.gguf");
-            let audio_llm = AudioLLM::new(&model_path).ok();
+            let mmproj_path = AudioLLM::models_dir().join("mmproj-BF16.gguf");
+
+            // ↓ Pasar mmproj_path al constructor
+            let audio_llm = if mmproj_path.exists() {
+                AudioLLM::new(&model_path, Some(&mmproj_path)).ok()
+            } else {
+                eprintln!("⚠️ mmproj no encontrado, AudioLLM sin soporte multimodal");
+                AudioLLM::new(&model_path, None).ok()
+            };
+
             let audio_capture = AudioCapture::new().ok();
 
             let engine = match TtsEngine::new(tts::assets_dir(), app.handle().clone()) {
