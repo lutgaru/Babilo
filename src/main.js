@@ -2,10 +2,31 @@ const { invoke } = window.__TAURI__.core;
 
 let greetInputEl;
 let greetMsgEl;
+let micSelectEl;  // ✅ Nuevo referencia al select
 
 let isRecording = false;
-let mediaRecorder = null;
 let audioChunks = [];
+
+// ── Cargar lista de micrófonos ─────────────────────────────────────────────
+async function loadAudioDevices() {
+  try {
+    const devices = await invoke('list_audio_devices');
+    micSelectEl.innerHTML = '<option value="">Default</option>'; // Reset
+
+    devices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.name;
+      option.textContent = device.name;
+      micSelectEl.appendChild(option);
+    });
+
+    console.log(`✅ ${devices.length} micrófonos encontrados`);
+  } catch (err) {
+    console.error("❌ Error cargando dispositivos:", err);
+    // Fallback: mostrar error en el select
+    micSelectEl.innerHTML = '<option>Error loading devices</option>';
+  }
+}
 
 // ── Control de Micrófono ─────────────────────────────────────────────
 async function toggleRecording() {
@@ -119,17 +140,30 @@ async function greet() {
   // greetMsgEl.textContent = await invoke("greet", { name: text });
 }
 
+// ── DOMContentLoaded ─────────────────────────────────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
   greetInputEl = document.querySelector("#greet-input");
   greetMsgEl = document.querySelector("#greet-msg");
+  micSelectEl = document.querySelector("#mic-select");  // ✅ Nueva referencia
+
   document.querySelector("#greet-form").addEventListener("submit", (e) => {
     e.preventDefault();
     greet();
   });
-  // Agregar botón de mic
+
+  // ✅ Botón de micrófono
   const micBtn = document.createElement('button');
   micBtn.id = 'mic-btn';
   micBtn.innerHTML = '🎤';
   micBtn.onclick = toggleRecording;
   document.querySelector('.row').appendChild(micBtn);
+
+  // ✅ Botón para refrescar dispositivos
+  const refreshBtn = document.getElementById('refresh-mics');
+  if (refreshBtn) {
+    refreshBtn.onclick = loadAudioDevices;
+  }
+
+  // ✅ Cargar dispositivos al iniciar
+  loadAudioDevices();
 });

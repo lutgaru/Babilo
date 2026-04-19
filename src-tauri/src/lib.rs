@@ -10,8 +10,28 @@ mod tts; // ← Tu módulo TTS existente
 
 use audio::{AudioCapture, AudioConfig, MelPreprocessor};
 use llama::AudioLLM;
-use tts::TtsEngine; // ← Ajusta según tu estructura real de tts.rs
+#[derive(Serialize, Deserialize)]
+pub struct AudioDevice {
+    pub name: String,
+    pub id: String, // Optional: use for precise selection
+}
 
+#[tauri::command]
+fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
+    let host = cpal::default_host();
+    
+    let devices = host.input_devices()
+        .map_err(|e| format!("Error enumerating devices: {}", e))?
+        .filter_map(|device| {
+            device.name().ok().map(|name| AudioDevice {
+                name,
+                id: String::new(), // CPAL doesn't expose stable IDs; name is usually enough
+            })
+        })
+        .collect();
+    
+    Ok(devices)
+}
 // ── AppState GLOBAL ─────────────────────────────────────────────────────
 pub struct AppState {
     pub tts_engine: Mutex<Option<TtsEngine>>,
@@ -139,6 +159,7 @@ pub fn run() {
             greet,
             synthesize,
             list_voices,
+            list_audio_devices, 
             start_listening,
             stop_and_process,
             test_inference,
