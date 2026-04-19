@@ -36,16 +36,21 @@ impl AudioLLM {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let backend = get_backend();
 
-        let params = LlamaModelParams::default().with_n_gpu_layers(0);
+        // ── 1. ACTIVATE GPU ────────────────────────────────────
+        // Change 0 to 99 to offload all layers to GPU
+        let params = LlamaModelParams::default().with_n_gpu_layers(99);
+
         let model = LlamaModel::load_from_file(backend, model_path, &params)?;
 
+        // ── 2. CONFIGURE AUDIO CONTEXT ───────────────────────────
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(NonZeroU32::new(4096))
-            .with_n_batch(512)
+            .with_n_batch(2048) // Aumentamos batch para que la GPU procese audio más rápido
             .with_n_ubatch(512)
-            .with_n_seq_max(1);
+            .with_n_seq_max(1)
+            .with_embeddings(true); // <--- VITAL para que el proyector de audio funcione en GPU
 
-        // ↓ Cargar mmproj aquí si se proporciona la ruta
+        // ── 3. LOAD MMPROJ ───────────────────────────────────────────────
         let mtmd_context = if let Some(mmproj) = mmproj_path {
             let params = llama_cpp_2::mtmd::MtmdContextParams::default();
             let ctx =
@@ -60,7 +65,7 @@ impl AudioLLM {
             model,
             ctx_params,
             audio_embed_dim: 2304,
-            mtmd_context, // ← guardar el contexto cargado
+            mtmd_context,
         })
     }
 
