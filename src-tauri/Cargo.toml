@@ -37,7 +37,7 @@ ndarray-rand = "0.14"
 realfft = "3.4"
 
 # llama.cpp (versión compatible)
-llama-cpp-2 = { git = "https://github.com/marek-hradil/llama-cpp-rs", branch = "update-version", features = ["mtmd", "vulkan"] }
+llama-cpp-2 = { version = "0.1.144", features = ["mtmd", "vulkan"] }
 
 # Utilidades
 rand = "0.10.1"
