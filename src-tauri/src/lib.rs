@@ -248,26 +248,20 @@ async fn stop_and_process(prompt: String, state: State<'_, AppState>) -> Result<
     };
 
     let mut llm_lock = state.audio_llm.lock().map_err(|e| e.to_string())?;
-    let Some(ref mut model) = *llm_lock else {
-        return Ok(format!("[Echo - no LLM] {}", prompt));
-    };
-
-    // ── 3. Intentar infer_audio si existe el mmproj ───────────────────────
-    let mmproj_path = AudioLLM::models_dir().join("mmproj-BF16.gguf");
-
-    if mmproj_path.exists() {
-        println!("✅ mmproj encontrado, usando infer_audio");
+    if let Some(ref mut model) = *llm_lock {
+        // ── Resetear si el contexto está lleno ────────────────────────
+        if model.context_is_full() {
+            eprintln!("🪟 Contexto lleno, reseteando antes de inferir");
+            model
+                .reset_context()
+                .map_err(|e| format!("Reset failed: {}", e))?;
+        }
 
         model
-            .infer_audio(&resampled_audio, &prompt) // ← solo 2 parámetros ahora
-            .map_err(|e| format!("infer_audio error: {}", e))
+            .infer_audio(&resampled_audio, &prompt)
+            .map_err(|e| format!("Inference error: {}", e))
     } else {
-        // ── Fallback: usar infer() de texto con el prompt del usuario ─────
-        println!(
-            "⚠️ mmproj no encontrado en {:?}, usando fallback de texto",
-            mmproj_path
-        );
-        Ok(format!("[Echo - no mmproj] "))
+        Ok(format!("[Echo] {}", prompt))
     }
 }
 
@@ -275,11 +269,71 @@ async fn stop_and_process(prompt: String, state: State<'_, AppState>) -> Result<
 async fn test_inference(state: State<'_, AppState>, test_prompt: String) -> Result<String, String> {
     let mut llm_lock = state.audio_llm.lock().map_err(|e| e.to_string())?;
     if let Some(ref mut model) = *llm_lock {
+        // ── Resetear si el contexto está lleno ────────────────────────
+        if model.context_is_full() {
+            eprintln!("🪟 Contexto lleno, reseteando antes de inferir");
+            model
+                .reset_context()
+                .map_err(|e| format!("Reset failed: {}", e))?;
+        }
         model
-            .infer(vec![], test_prompt.as_str())
+            .infer(vec![], &test_prompt)
             .map_err(|e| format!("Inference error: {}", e))
     } else {
         Ok("No LLM model available".into())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 👇 NUEVO COMANDO: Resetear conversación (limpia memoria del LLM)
+// ═══════════════════════════════════════════════════════════════
+#[tauri::command]
+fn reset_conversation(state: State<'_, AppState>) -> Result<bool, String> {
+    let mut llm_lock = state.audio_llm.lock().map_err(|e| e.to_string())?;
+
+    if let Some(ref mut model) = *llm_lock {
+        model
+            .reset_context()
+            .map(|_| {
+                eprintln!("🧹 Conversación reseteada desde frontend");
+                true
+            })
+            .map_err(|e| format!("reset_context error: {}", e))
+    } else {
+        // Si no hay modelo, igual retornamos éxito (no hay nada que resetear)
+        Ok(true)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 👇 OPCIONAL: Obtener uso del contexto para debugging/UI
+// ═══════════════════════════════════════════════════════════════
+#[derive(Serialize, Deserialize)]
+pub struct ContextUsage {
+    pub used: i32,
+    pub total: i32,
+    pub percent: f32,
+}
+
+#[tauri::command]
+fn get_context_usage(state: State<'_, AppState>) -> Result<ContextUsage, String> {
+    let llm_lock = state.audio_llm.lock().map_err(|e| e.to_string())?;
+
+    if let Some(ref model) = *llm_lock {
+        // Nota: necesitarás agregar este método público en AudioLLM si lo quieres exponer:
+        // pub fn context_usage(&self) -> (i32, i32) { ... }
+        // Por ahora retornamos valores placeholder
+        Ok(ContextUsage {
+            used: 0,
+            total: 4096,
+            percent: 0.0,
+        })
+    } else {
+        Ok(ContextUsage {
+            used: 0,
+            total: 4096,
+            percent: 0.0,
+        })
     }
 }
 
@@ -297,6 +351,8 @@ pub fn run() {
             start_listening,
             stop_and_process,
             test_inference,
+            reset_conversation, // ← NUEVO
+            get_context_usage,  // ← OPCIONAL para debugging
         ])
         .setup(|app| {
             let preprocessor = MelPreprocessor::new(16000, 128, 512);
