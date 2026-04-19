@@ -164,12 +164,18 @@ fn start_listening(
         return Err("No se pudo acceder al buffer de audio".into());
     }
 
+    let n_channels = config.channels() as usize; // Obtener si es 1, 2 o más
+
     let stream = device
         .build_input_stream(
             &config.into(),
             move |data: &[f32], _: &cpal::InputCallbackInfo| {
                 if let Ok(mut buffer) = audio_buffer.lock() {
-                    buffer.extend_from_slice(data);
+                    // EXPLANATION: If it's stereo, skip the samples from the right channel.
+                    // If it's mono, simply copy everything.
+                    for frame in data.chunks(n_channels) {
+                        buffer.push(frame[0]);
+                    }
                 }
             },
             |err| eprintln!("Error en el stream: {}", err),
