@@ -30,55 +30,34 @@ async function loadAudioDevices() {
 
 // ── Control de Micrófono ─────────────────────────────────────────────
 async function toggleRecording() {
+  const selectedDevice = micSelectEl.value || null; // "" → null → default
+
   if (!isRecording) {
-    // Iniciar captura
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,  // Coincidir con config Rust
-          channelCount: 1,
-          echoCancellation: true
-        }
-      });
-
-      mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=pcm',
-        audioBitsPerSecond: 256000
-      });
-
-      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-      mediaRecorder.start(100); // Colectar cada 100ms
-
-      await invoke('start_listening');
+      // ✅ Pasamos el nombre del dispositivo seleccionado
+      await invoke('start_listening', { deviceName: selectedDevice });
       isRecording = true;
+      document.getElementById('mic-btn').innerHTML = '⏹️';
       document.getElementById('mic-btn').classList.add('recording');
-
     } catch (err) {
-      console.error('❌ Error mic:', err);
+      console.error("Error al iniciar micro nativo:", err);
+      alert(`Error: ${err}`);
     }
   } else {
-    // Detener y procesar
-    mediaRecorder?.stop();
-    mediaRecorder?.stream?.getTracks().forEach(t => t.stop());
-
     const prompt = document.getElementById('greet-input').value;
-    document.getElementById('greet-msg').textContent = "🔄 Procesando audio...";
-
     try {
       const response = await invoke('stop_and_process', { prompt });
-      document.getElementById('greet-msg').textContent = response;
-
-      // Opcional: TTS de la respuesta
+      console.log("Respuesta del motor:", response);
       await speak(response);
-
+      // Opcional: mostrar respuesta o reproducir TTS
+      greetMsgEl.textContent = response;
     } catch (err) {
-      console.error('❌ Error processing:', err);
-      document.getElementById('greet-msg').textContent = `Error: ${err}`;
+      console.error("Error procesando audio:", err);
+    } finally {
+      isRecording = false;
+      document.getElementById('mic-btn').innerHTML = '🎤';
+      document.getElementById('mic-btn').classList.remove('recording');
     }
-
-    audioChunks = [];
-    isRecording = false;
-    document.getElementById('mic-btn').classList.remove('recording');
   }
 }
 

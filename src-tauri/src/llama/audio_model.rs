@@ -132,6 +132,199 @@ impl AudioLLM {
         Ok(output.trim().to_string())
     }
 
+    pub fn infer_audio(
+        &mut self,
+        audio_pcm: &[f32],
+        mmproj_path: &str,
+        prompt: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        use llama_cpp_2::mtmd::{
+            mtmd_default_marker, MtmdBitmap, MtmdContext, MtmdContextParams, MtmdInputText,
+        };
+
+        let backend = get_backend();
+
+        eprintln!(
+            "🔊 infer_audio START — {} samples, mmproj: {}",
+            audio_pcm.len(),
+            mmproj_path
+        );
+
+        // ── 1. MTMD context ───────────────────────────────────────────────────
+        eprintln!("  [1] Creando MtmdContext...");
+        let mtmd_params = MtmdContextParams::default();
+        let mtmd_ctx = MtmdContext::init_from_file(mmproj_path, &self.model, &mtmd_params)
+            .map_err(|e| format!("Failed to init MTMD context: {}", e))?;
+        eprintln!("  [1] ✅ MtmdContext creado");
+        eprintln!(
+            "       support_audio={}, sample_rate={:?}",
+            mtmd_ctx.support_audio(),
+            mtmd_ctx.get_audio_sample_rate()
+        );
+
+        // if !mtmd_ctx.support_audio() {
+        //     return Err("Modelo no soporta audio — ¿es el mmproj correcto para Gemma 4 audio?".into());
+        // }
+
+        // ── 2. Audio bitmap ───────────────────────────────────────────────────
+        eprintln!(
+            "  [2] Creando audio bitmap desde {} samples...",
+            audio_pcm.len()
+        );
+
+        // Resamplear si el modelo espera 16kHz y cpal grabó a otra frecuencia
+        // (cpal usa la frecuencia del sistema, puede ser 44100 o 48000)
+        // Por ahora asumimos 16kHz — si no funciona hay que resamplear
+        let audio_bitmap = MtmdBitmap::from_audio_data(audio_pcm)
+            .map_err(|e| format!("Failed to create audio bitmap: {}", e))?;
+        eprintln!(
+            "  [2] ✅ Bitmap creado, is_audio={}",
+            audio_bitmap.is_audio()
+        );
+
+        // ── 3. Prompt con instrucciones de sistema ─────────────────────────────────
+        let marker = mtmd_default_marker();
+        eprintln!("  [3] marker={:?}", marker);
+
+        // 🔥 System prompt para controlar el estilo de respuesta
+        let system_instruction = "You are a helpful assistant. Reply conversationally in 1-2 sentences max. Be concise and natural. No bullet points, no lists.";
+
+        let full_prompt = format!(
+            "<start_of_turn>user\n{}\n\n{}{}<end_of_turn>\n<start_of_turn>model\n",
+            system_instruction, // ← Instrucciones de comportamiento
+            marker,             // ← Placeholder para el audio
+            if prompt.is_empty() {
+                "".to_string()
+            } else {
+                format!("\n{}", prompt) // ← Prompt del usuario (si hay)
+            }
+        );
+
+        eprintln!(
+            "  [3] prompt completo: {:?}",
+            &full_prompt[..full_prompt.len().min(120)]
+        );
+
+        // ── 4. Tokenizar ──────────────────────────────────────────────────────
+        eprintln!("  [4] Tokenizando...");
+        let input_text = MtmdInputText {
+            text: full_prompt,
+            add_special: true,
+            parse_special: true,
+        };
+        let chunks = mtmd_ctx
+            .tokenize(input_text, &[&audio_bitmap])
+            .map_err(|e| format!("Tokenize failed: {}", e))?;
+        eprintln!(
+            "  [4] ✅ {} chunks, {} tokens totales, {} posiciones",
+            chunks.len(),
+            chunks.total_tokens(),
+            chunks.total_positions()
+        );
+
+        // ── 5. LlamaContext ───────────────────────────────────────────────────
+        eprintln!("  [5] Creando LlamaContext...");
+        let mut ctx = self
+            .model
+            .new_context(backend, self.ctx_params.clone())
+            .map_err(|e| format!("Failed to create context: {}", e))?;
+        eprintln!("  [5] ✅ LlamaContext creado, n_ctx={}", ctx.n_ctx());
+
+        // Verificar que el contexto es suficientemente grande
+        if chunks.total_tokens() >= ctx.n_ctx() as usize {
+            return Err(format!(
+                "Audio demasiado largo: {} tokens > ctx {}",
+                chunks.total_tokens(),
+                ctx.n_ctx()
+            )
+            .into());
+        }
+
+        // ── 6. eval_chunks ────────────────────────────────────────────────────
+        eprintln!("  [6] eval_chunks... (esto puede tardar)");
+
+        const N_BATCH: i32 = 512;
+        let n_past = chunks
+            .eval_chunks(&mtmd_ctx, &ctx, 0, 0, N_BATCH, true) // true = request logits for last token
+            .map_err(|e| format!("eval_chunks failed: {}", e))?;
+
+        eprintln!("  [6] ✅ eval_chunks OK, n_past={}", n_past);
+
+        if n_past == 0 {
+            return Err("Error: n_past es 0, la evaluación no avanzó".into());
+        }
+
+        // 🔥 FIX CRÍTICO: "Bridge decode" para asegurar logits en índice 0
+        // eval_chunks puede dejar los logits en un índice impredecible.
+        // Decodificamos un token neutro en posición n_past con logits=true
+        // para resetear el buffer y garantizar que el primer sample lea desde idx 0.
+        eprintln!("  [6.5] 🔗 Bridge decode para preparar logits...");
+        let mut bridge_batch = LlamaBatch::new(1, 1);
+        // Usamos token_bos como placeholder; NO usaremos su output para texto
+        bridge_batch
+            .add(self.model.token_bos(), n_past as i32, &[0], true) // ← logits=true es vital
+            .map_err(|e| format!("Bridge batch failed: {}", e))?;
+        ctx.decode(&mut bridge_batch)
+            .map_err(|e| format!("Bridge decode failed: {}", e))?;
+        // ✅ Ahora los logits están garantizados en batch index 0
+
+        // ── 7. Generación ─────────────────────────────────────────────────────
+        eprintln!("  [7] Iniciando generación...");
+
+        let mut sampler = LlamaSampler::chain_simple([
+            LlamaSampler::top_k(40),
+            LlamaSampler::top_p(0.9, 1),
+            LlamaSampler::temp(0.7),
+            LlamaSampler::dist(42),
+        ]);
+
+        let mut output = String::new();
+        // ⚠️ n_cur empieza en n_past + 1 porque el bridge token ocupa posición n_past
+        let mut n_cur = n_past + 1;
+
+        for i in 0..150 {
+            // ✅ Siempre sampleamos desde índice 0 (logits garantizados tras bridge)
+            let new_token = sampler.sample(&ctx, 0);
+            sampler.accept(new_token);
+
+            let is_eos = new_token == self.model.token_eos();
+            let is_eog = self.model.is_eog_token(new_token);
+
+            if is_eos || is_eog {
+                eprintln!("  [7] ⛔ Stop token en iteración {}", i);
+                break;
+            }
+
+            if let Ok(bytes) = self.model.token_to_piece_bytes(new_token, 256, true, None) {
+                let piece = String::from_utf8_lossy(&bytes).to_string();
+                if piece.contains("<end_of_turn>") || piece.contains("<start_of_turn>") {
+                    break;
+                }
+                output.push_str(&piece);
+                if output.len() > 150
+                    && (piece.contains('.') || piece.contains('!') || piece.contains('?'))
+                {
+                    break;
+                }
+            }
+
+            // Preparar batch para SIGUIENTE decode: marcar ESTE token para logits
+            let mut batch = LlamaBatch::new(1, 1);
+            batch
+                .add(new_token, n_cur, &[0], true) // ← logits=true para próxima iteración
+                .map_err(|e| format!("Batch add failed: {}", e))?;
+
+            n_cur += 1;
+
+            ctx.decode(&mut batch)
+                .map_err(|e| format!("Decode failed: {}", e))?;
+            // ✅ Tras decode, logits del nuevo token están en índice 0
+        }
+
+        eprintln!("🔊 infer_audio END — output={:?}", output);
+        Ok(output.trim().to_string())
+    }
+
     pub fn models_dir() -> std::path::PathBuf {
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
