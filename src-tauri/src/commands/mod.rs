@@ -1,10 +1,10 @@
 //! Comandos Tauri exponibles al frontend
 
-use tauri::{Manager, State};
+use tauri::{ State};
 use serde::{Serialize, Deserialize};
 use crate::{
     state::AppState,
-    errors::{AppError, AppResult},
+    errors::{AppError},
     audio::list_input_devices,
 };
 
@@ -91,7 +91,6 @@ pub fn start_listening(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use crate::audio::AudioCapture;
 
     let host = cpal::default_host();
     
@@ -99,7 +98,11 @@ pub fn start_listening(
     let device = if let Some(ref name) = device_name {
         host.input_devices()
             .map_err(|e| format!("Error enumerating devices: {}", e))?
-            .find(|d| d.name().ok().as_ref() == Some(name))
+            .find(|d| {
+                d.description()
+                    .map(|desc| desc.name() == name)
+                    .unwrap_or(false)
+            })
             .ok_or_else(|| format!("Microphone not found: '{}'", name))?
     } else {
         host.default_input_device()

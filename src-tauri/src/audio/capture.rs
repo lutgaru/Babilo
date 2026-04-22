@@ -1,5 +1,6 @@
 //! Captura de audio desde hardware usando CPAL
 
+use crate::errors::{AppError, AudioError};
 use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
     Device, SampleFormat, Stream, StreamConfig,
@@ -8,7 +9,6 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use crate::{config::AudioConfig, errors::{AppError, AudioError}};
 
 pub struct AudioCapture {
     device: Device,
@@ -48,7 +48,11 @@ impl AudioCapture {
         let device = host
             .input_devices()
             .map_err(|e| AudioError::DeviceConfig(e))?
-            .find(|d| d.name().ok().as_ref() == Some(&name.to_string()))
+            .find(|d| {
+                d.description()
+                    .map(|desc| desc.name() == name)
+                    .unwrap_or(false)
+            })
             .ok_or(AudioError::DeviceNotFound(name.into()))?;
 
         let mut config: StreamConfig = device.default_input_config()?.into();
@@ -133,15 +137,15 @@ pub fn list_input_devices() -> Result<Vec<AudioDeviceInfo>, AppError> {
     let host = cpal::default_host();
     let default_name = host
         .default_input_device()
-        .and_then(|d| d.name().ok());
+        .and_then(|d| d.description().ok().map(|desc| desc.name().to_string()));
 
     let devices = host
         .input_devices()
         .map_err(|e| AudioError::DeviceConfig(e))?
         .filter_map(|device| {
-            device.name().ok().map(|name| AudioDeviceInfo {
-                is_default: default_name.as_ref() == Some(&name),
-                name,
+            device.description().ok().map(|desc| AudioDeviceInfo {
+                name: desc.name().to_string(),
+                is_default: desc.name() == default_name.as_deref().unwrap_or(""),
             })
         })
         .collect();

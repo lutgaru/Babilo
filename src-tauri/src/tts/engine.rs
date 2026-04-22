@@ -3,13 +3,12 @@
 use crate::{
     config::TtsConfig,
     errors::{AppError, TtsError},
-    tts::utils::{load_voice_style, UnicodeProcessor, VoiceStyle},
+    tts::utils::{load_voice_style, UnicodeProcessor},
 };
 use ort::{inputs, session::Session, value::Tensor};
 use rand::rngs::ThreadRng;
 use rand_distr::{Distribution, Normal};
-use serde::Deserialize;
-use std::path::{Path, PathBuf};
+use std::path::{ PathBuf};
 use tauri::AppHandle;
 
 trait OrtResultExt<T> {
@@ -44,7 +43,7 @@ impl TtsEngine {
         // Cargar configuración
         let config: TtsConfig = serde_json::from_str(
             &std::fs::read_to_string(onnx_dir.join("tts.json"))
-                .map_err(|e| TtsError::ConfigMissing)?,
+                .map_err(|_e| TtsError::ConfigMissing)?,
         )
         .map_err(|e| TtsError::SessionLoad(e.to_string()))?;
 

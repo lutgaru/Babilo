@@ -8,7 +8,7 @@ use crate::{
 use llama_cpp_2::{
     context::LlamaContext,
     llama_batch::LlamaBatch,
-    model::{AddBos, LlamaModel},
+    model::{AddBos},
     mtmd::{mtmd_default_marker, MtmdBitmap, MtmdInputText},
     sampling::LlamaSampler,
     token::LlamaToken,

@@ -1,10 +1,11 @@
 //! Procesamiento de señal de audio: Mel spectrograms, FFT, etc.
 
-use ndarray::{Array1, Array2, arr1};
+use ndarray::{Array2, arr1};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
 use crate::config::AudioConfig;
 
+#[allow(dead_code)]
 pub struct MelPreprocessor {
     fft_size: usize,
     mel_filters: Array2<f32>,
