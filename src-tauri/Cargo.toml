@@ -27,13 +27,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # Audio
-cpal = "0.15"
-rubato = "0.15"
+cpal = "0.17.3"
 hound = "3.5"
 
 # Procesamiento numérico
-ndarray = "0.15"
-ndarray-rand = "0.14"
+ndarray = "0.17.2"
+ndarray-rand = "0.16.0"
 realfft = "3.4"
 
 # llama.cpp (versión compatible)

@@ -32,7 +32,7 @@ impl AudioCapture {
 
         // ✅ Usar default_config y modificar solo lo necesario
         let mut config: cpal::StreamConfig = device.default_input_config()?.into();
-        config.sample_rate = cpal::SampleRate(16000);
+        config.sample_rate = 16000;
         config.channels = 1;
 
         Ok(Self {

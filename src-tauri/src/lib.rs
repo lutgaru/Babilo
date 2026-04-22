@@ -148,7 +148,7 @@ fn start_listening(
     };
 
     let config = device.default_input_config().map_err(|e| e.to_string())?;
-    let actual_hz = config.sample_rate().0;
+    let actual_hz = config.sample_rate();
 
     // Guardamos la frecuencia real en el estado
     if let Ok(mut hz_lock) = state.current_sample_rate.lock() {
