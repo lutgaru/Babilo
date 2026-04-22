@@ -47,7 +47,6 @@ impl InferenceEngine {
         // ── Fase 1: extraer todo de `model` ANTES de ctx_mut ─────────────────
         // Una vez que llamemos ctx_mut(), el borrow checker ve `self.model`
         // como mutuamente prestado y ya no permite acceder a ningún otro campo.
-        print!("🧠 Received prompt: {}", prompt);
         let full_prompt = build_text_prompt(prompt, &self.state);
         let add_bos = bos_flag(&self.state);
 

@@ -8,6 +8,7 @@ use llama_cpp_2::{
     mtmd::MtmdContext,
 };
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::OnceLock;
 use crate::{config::LlmConfig, errors::{AppError, LlmError}};
 
@@ -21,33 +22,32 @@ pub fn get_backend() -> &'static LlamaBackend {
     })
 }
 
-/// Modelo y contexto LLM.
+/// Innards del modelo en el heap, pineados para que nunca se muevan.
 ///
-/// # Orden de campos (crítico para drop order)
+/// # Por qué Pin<Box<...>>
 ///
-/// Rust dropea los campos en orden INVERSO al de declaración.
-/// `ctx` debe declararse ANTES de `model` para que sea dropeado primero,
-/// garantizando que el contexto no outlive al modelo que referencia.
+/// `LlamaContext<'a>` guarda un puntero interno al `LlamaModel` del que
+/// fue creado. Si el struct que contiene ambos se mueve en memoria (stack
+/// o realloc), el puntero interno queda colgando → ACCESS_VIOLATION en
+/// release (el compilador optimiza más agresivamente).
 ///
-/// # Safety del transmute
-///
-/// `LlamaContext<'a>` toma prestado de `LlamaModel`. Usamos `'static` como
-/// lifetime erased porque la crate no expone un constructor que permita
-/// self-referential structs. El invariante es: mientras `LlmModel` viva,
-/// `model` nunca se mueve ni se dropea antes que `ctx`.
-pub struct LlmModel {
-    // IMPORTANTE: ctx antes de model → se dropea primero
+/// `Pin<Box<Inner>>` garantiza que la dirección de `Inner` en el heap
+/// nunca cambia después de la construcción, haciendo el invariante seguro
+/// incluso con optimizaciones de release.
+struct Inner {
+    // ctx ANTES de model → se dropea primero (drop order inverso al de declaración)
     ctx:          Option<LlamaContext<'static>>,
     model:        LlamaModel,
-    ctx_params:   LlamaContextParams,
-    config:       LlmConfig,
     mtmd_context: Option<MtmdContext>,
+}
+
+pub struct LlmModel {
+    inner:      Pin<Box<Inner>>,
+    ctx_params: LlamaContextParams,
+    config:     LlmConfig,
     audio_embed_dim: usize,
 }
 
-// SAFETY: LlamaContext<'static> no implementa Send/Sync porque la crate
-// no sabe que el lifetime es válido. Aquí garantizamos que ctx y model
-// siempre viven juntos en LlmModel y nunca se separan.
 unsafe impl Send for LlmModel {}
 unsafe impl Sync for LlmModel {}
 
@@ -72,13 +72,6 @@ impl LlmModel {
             .with_n_seq_max(1)
             .with_embeddings(true);
 
-        // SAFETY: ctx referencia model. Ambos viven en este struct y ctx
-        // se declaró antes que model → drop order correcto garantizado.
-        let ctx_raw = model
-            .new_context(backend, ctx_params.clone())
-            .map_err(|e| LlmError::ContextInit(e.to_string()))?;
-        let ctx: LlamaContext<'static> = unsafe { std::mem::transmute(ctx_raw) };
-
         let mtmd_context = if let Some(mmproj) = mmproj_path {
             let params = llama_cpp_2::mtmd::MtmdContextParams::default();
             let mtmd = MtmdContext::init_from_file(
@@ -91,64 +84,75 @@ impl LlmModel {
             None
         };
 
-        Ok(Self {
-            ctx: Some(ctx),
+        // Construir Inner en el heap ANTES de crear el contexto,
+        // para que la dirección de `model` sea definitiva cuando
+        // new_context() guarda el puntero interno.
+        let mut inner = Box::new(Inner {
+            ctx:   None,
             model,
+            mtmd_context,
+        });
+
+        // SAFETY: inner.model ya está en su dirección final (heap).
+        // Pin garantiza que nunca se moverá. ctx se declara antes que
+        // model en Inner → drop order correcto.
+        let ctx_raw = inner.model
+            .new_context(backend, ctx_params.clone())
+            .map_err(|e| LlmError::ContextInit(e.to_string()))?;
+        inner.ctx = Some(unsafe { std::mem::transmute(ctx_raw) });
+
+        Ok(Self {
+            inner: Pin::new(inner),
             ctx_params,
             config,
-            mtmd_context,
             audio_embed_dim: 2304,
         })
     }
 
     /// Recrea el contexto (resetea KV cache para nueva conversación).
     pub fn reset_context(&mut self) -> Result<(), AppError> {
-        // Dropear ctx viejo ANTES de crear el nuevo — crítico para safety
-        self.ctx = None;
+        // SAFETY: no movemos Inner, solo mutamos su contenido.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
 
-        let ctx_raw = self.model
+        // Dropear ctx viejo ANTES de crear el nuevo
+        inner.ctx = None;
+
+        let ctx_raw = inner.model
             .new_context(get_backend(), self.ctx_params.clone())
             .map_err(|e| LlmError::ContextInit(e.to_string()))?;
 
-        // SAFETY: misma garantía que en new()
-        self.ctx = Some(unsafe { std::mem::transmute(ctx_raw) });
+        inner.ctx = Some(unsafe { std::mem::transmute(ctx_raw) });
         Ok(())
     }
 
     /// Borrow mutable del contexto con lifetime correcto.
     pub fn ctx_mut(&mut self) -> Result<&mut LlamaContext<'_>, AppError> {
-        // SAFETY: transmute 'static → lifetime del borrow de self.
-        // Seguro porque ctx no puede outlive self.
-        self.ctx
+        // SAFETY: no movemos Inner, solo tomamos referencia mutable a ctx.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
+        inner.ctx
             .as_mut()
             .map(|c| unsafe {
-                let c: &mut LlamaContext<'static> = c;
                 std::mem::transmute::<&mut LlamaContext<'static>, &mut LlamaContext<'_>>(c)
             })
             .ok_or_else(|| LlmError::NotInitialized.into())
     }
 
-    /// Retorna (&mut ctx, &mtmd) simultáneamente.
-    ///
-    /// El borrow checker no puede inferir que ctx y mtmd_context son campos
-    /// distintos cuando los pedimos a través de métodos `&mut self`. Este
-    /// método hace el split explícitamente usando punteros raw, lo cual es
-    /// seguro porque los campos no se solapan en memoria.
+    /// Retorna (&mut ctx, &mtmd) simultáneamente via borrow split explícito.
     pub fn split_ctx_mtmd(
         &mut self,
     ) -> Result<(&mut LlamaContext<'_>, &MtmdContext), AppError> {
-        let ctx = self.ctx
+        // SAFETY: no movemos Inner.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
+
+        let ctx = inner.ctx
             .as_mut()
             .ok_or(LlmError::NotInitialized)?;
 
-        let mtmd = self.mtmd_context
+        let mtmd = inner.mtmd_context
             .as_ref()
             .ok_or(LlmError::MtmdInit("No mmproj loaded".into()))?;
 
-        // SAFETY: ctx y mtmd_context son campos distintos del struct.
-        // Creamos dos referencias que no se solapan. El raw pointer
-        // evita que el borrow checker piense que ambos vienen del mismo
-        // `&mut self`, cuando en realidad son regiones de memoria distintas.
+        // SAFETY: ctx y mtmd_context son campos distintos de Inner → no se solapan.
         let ctx_ptr: *mut LlamaContext<'static> = ctx as *mut _;
         let ctx_ref: &mut LlamaContext<'_> = unsafe {
             std::mem::transmute(&mut *ctx_ptr)
@@ -172,24 +176,34 @@ impl LlmModel {
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
-    pub fn model(&self) -> &LlamaModel            { &self.model }
+    pub fn model(&self) -> &LlamaModel {
+        &self.inner.model
+    }
+
     pub fn config(&self) -> &LlmConfig            { &self.config }
     pub fn audio_embed_dim(&self) -> usize         { self.audio_embed_dim }
     pub fn ctx_params(&self) -> &LlamaContextParams { &self.ctx_params }
 
-    pub fn mtmd_context(&self) -> Option<&MtmdContext>         { self.mtmd_context.as_ref() }
-    pub fn mtmd_context_mut(&mut self) -> Option<&mut MtmdContext> { self.mtmd_context.as_mut() }
+    pub fn mtmd_context(&self) -> Option<&MtmdContext> {
+        self.inner.mtmd_context.as_ref()
+    }
+
+    pub fn mtmd_context_mut(&mut self) -> Option<&mut MtmdContext> {
+        // SAFETY: no movemos Inner.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
+        inner.mtmd_context.as_mut()
+    }
+
+    pub fn context_usage(&self, n_past: i32) -> (u32, u32) {
+        let total = self.n_ctx();
+        let used  = (n_past.max(0) as u32).min(total);
+        (used, total)
+    }
 
     pub fn models_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .expect("Raíz del proyecto no encontrada")
             .join("models")
-    }
-
-    pub fn context_usage(&self, n_past: i32) -> (u32, u32) {
-        let total = self.n_ctx();
-        let used = (n_past.max(0) as u32).min(total);
-        (used, total)
     }
 }

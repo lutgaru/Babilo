@@ -62,7 +62,6 @@ pub fn synthesize(
     voice: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<i8>, String> {
-    print!("🎤 TTS request: '{}', voice: '{}'", text, voice.as_deref().unwrap_or("default"));
     let voice_id = voice.unwrap_or_else(|| "F1".to_string());
     let mut engine_lock = state.tts_engine.lock()
         .map_err(|e| e.to_string())?;
