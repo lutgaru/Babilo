@@ -46,3 +46,5 @@ byteorder = "1.5"
 
 # Tu motor TTS (ort/Supertonic)
 ort = { version = "2.0.0-rc.9", features = ["download-binaries"] }
+
+thiserror = "1.0"
