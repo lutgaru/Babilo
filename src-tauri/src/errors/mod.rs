@@ -85,6 +85,9 @@ pub enum AudioError {
 
      #[error("Configuración de stream: {0}")]
     StreamConfig(#[source] cpal::DefaultStreamConfigError),  // ← nueva
+
+        #[error("Captura ya activa")]
+    CaptureAlreadyActive,
 }
 
 #[derive(Error, Debug)]
