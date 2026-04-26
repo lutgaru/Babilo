@@ -1,33 +1,260 @@
 <!doctype html>
-<html lang="en">
+<!--
+ * Babilo - Copyright (C) 2026 Lutgaru
+ * SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="stylesheet" href="styles.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri App</title>
+    <title>Babilo</title>
     <script type="module" src="/main.js" defer></script>
   </head>
 
   <body>
-    <main class="container">
-      <h1>Welcome to Tauri</h1>
+    <main class="bbl-shell">
 
-      <p>Click on the Tauri logo to learn more about the framework</p>
+      <!-- Top bar -->
+      <header class="bbl-topbar">
+        <div class="bbl-brand">babi<span class="bbl-brand-accent">lo</span></div>
+        <div class="bbl-topbar-right">
+          <div class="bbl-status">
+            <span class="bbl-status-dot" id="status-dot"></span>
+            <span class="bbl-status-label" id="status-label">listo</span>
+          </div>
+          <div class="bbl-timer" id="call-timer">00:00</div>
+        </div>
+      </header>
 
-      <form class="row" id="greet-form">
-        <input id="greet-input" placeholder="Enter a name..." />
-        <button type="submit">Greet</button>
-        <button type="button" id="mic-btn">🎤</button>
-      </form>
-      <p id="greet-msg"></p>
-      <div class="mic-selector" style="margin: 10px 0;">
-  <label for="mic-select">🎤 Mic: </label>
-  <select id="mic-select">
-    <option value="">Default</option>
-    <!-- Devices will be populated here -->
-  </select>
-  <button type="button" id="refresh-mics" title="Refresh devices">🔄</button>
-</div>
+      <!-- Stage -->
+      <section class="bbl-stage">
+
+        <!-- Avatar con anillos -->
+        <div class="bbl-avatar-wrap" id="avatar-wrap">
+          <div class="bbl-ring bbl-ring--c"></div>
+          <div class="bbl-ring bbl-ring--b"></div>
+          <div class="bbl-ring bbl-ring--a"></div>
+          <div class="bbl-avatar">AI</div>
+        </div>
+
+        <!-- Estado del AI -->
+        <div class="bbl-ai-info">
+          <span class="bbl-ai-label">asistente</span>
+          <span class="bbl-ai-state" id="ai-state">En espera</span>
+        </div>
+
+        <!-- Visualizador de ondas -->
+        <div class="bbl-waveform" id="waveform" aria-hidden="true">
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar bbl-bar--active"></div>
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar"></div>
+          <div class="bbl-bar"></div>
+        </div>
+
+        <!-- Caja de respuesta / transcripción -->
+        <div class="bbl-transcript">
+          <div class="bbl-transcript-label">respuesta</div>
+          <p class="bbl-transcript-text" id="greet-msg">
+            <span class="bbl-placeholder">Aquí aparecerá la respuesta del asistente...</span>
+          </p>
+        </div>
+
+      </section>
+
+      <!-- Controls -->
+      <footer class="bbl-controls">
+
+        <!-- Selector de micrófono -->
+        <div class="bbl-mic-row">
+          <span class="bbl-mic-row-label">
+            <svg class="bbl-icon-xs" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="5" y="1" width="6" height="8" rx="3"/>
+              <path d="M2 7v1a6 6 0 0 0 12 0V7" stroke-linecap="round"/>
+              <path d="M8 14v2M6 16h4" stroke-linecap="round"/>
+            </svg>
+            Micro
+          </span>
+          <div class="bbl-select-wrap">
+            <select id="mic-select" class="bbl-select">
+              <option value="">Predeterminado</option>
+            </select>
+            <span class="bbl-select-chevron" aria-hidden="true">▾</span>
+          </div>
+          <button type="button" id="refresh-mics" class="bbl-icon-btn" title="Refrescar dispositivos">
+            <svg class="bbl-icon-xs" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M2 8a6 6 0 1 0 1.5-3.9" stroke-linecap="round"/>
+              <path d="M2 4v4h4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Fila de botones principales -->
+        <div class="bbl-action-row">
+
+          <!-- Mute (decorativo por ahora) -->
+          <button type="button" class="bbl-ctrl-btn" title="Silenciar">
+            <svg class="bbl-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M12 2a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"/>
+              <path d="M6 10v2a6 6 0 0 0 12 0v-2" stroke-linecap="round"/>
+              <path d="M12 19v3M9 22h6" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+          <!-- Volumen (decorativo por ahora) -->
+          <button type="button" class="bbl-ctrl-btn" title="Volumen">
+            <svg class="bbl-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M11 5L6 9H2v6h4l5 4V5z" stroke-linejoin="round"/>
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+          <!-- Botón principal de micrófono — conectado a toggleRecording() -->
+          <button type="button" id="mic-btn" class="bbl-mic-main" title="Grabar / Detener">
+            <svg class="bbl-icon-md" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="9" y="2" width="6" height="12" rx="3"/>
+              <path d="M5 10v2a7 7 0 0 0 14 0v-2" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+              <path d="M12 19v3M9 22h6" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+          <!-- Ajustes (decorativo por ahora) -->
+          <button type="button" class="bbl-ctrl-btn" title="Configuración">
+            <svg class="bbl-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+          <!-- Colgar (decorativo — conectar a lógica de cierre si aplica) -->
+          <button type="button" class="bbl-end-btn" title="Colgar">
+            <svg class="bbl-icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" stroke-linecap="round"/>
+              <line x1="4" y1="4" x2="20" y2="20" stroke-linecap="round"/>
+            </svg>
+          </button>
+
+        </div>
+
+        <!-- Fila de texto / prompt — conectado al form original -->
+        <form class="bbl-input-row" id="greet-form">
+          <input
+            type="text"
+            id="greet-input"
+            class="bbl-text-input"
+            placeholder="Escribe un prompt o prueba de voz..."
+            autocomplete="off"
+          />
+          <button type="submit" class="bbl-send-btn" title="Enviar">
+            <svg class="bbl-icon-xs" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M2 8l12-6-6 12-.5-5.5L2 8z"/>
+            </svg>
+          </button>
+        </form>
+
+      </footer>
+
     </main>
+
+    <!-- Script UI: refleja el estado de grabación en la interfaz -->
+    <script type="module">
+      // Espera a que main.js monte sus listeners y luego parchea el botón
+      // para sincronizar la UI (anillos, estado, timer) con toggleRecording()
+
+      let timerInterval = null;
+      let seconds = 0;
+
+      function startTimer() {
+        seconds = 0;
+        timerInterval = setInterval(() => {
+          seconds++;
+          const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+          const s = String(seconds % 60).padStart(2, '0');
+          document.getElementById('call-timer').textContent = `${m}:${s}`;
+        }, 1000);
+      }
+
+      function stopTimer() {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        document.getElementById('call-timer').textContent = '00:00';
+      }
+
+      function setRecordingUI(active) {
+        const micBtn     = document.getElementById('mic-btn');
+        const avatarWrap = document.getElementById('avatar-wrap');
+        const aiState    = document.getElementById('ai-state');
+        const statusDot  = document.getElementById('status-dot');
+        const statusLabel = document.getElementById('status-label');
+
+        if (active) {
+          micBtn.classList.add('recording');
+          avatarWrap.classList.add('pulsing');
+          aiState.textContent = 'Escuchando...';
+          statusDot.classList.add('active');
+          statusLabel.textContent = 'grabando';
+          document.getElementById('waveform').classList.add('live');
+          startTimer();
+        } else {
+          micBtn.classList.remove('recording');
+          avatarWrap.classList.remove('pulsing');
+          aiState.textContent = 'Procesando...';
+          statusDot.classList.remove('active');
+          statusLabel.textContent = 'procesando';
+          document.getElementById('waveform').classList.remove('live');
+          stopTimer();
+          // Tras un momento vuelve a "listo"
+          setTimeout(() => {
+            const lbl = document.getElementById('status-label');
+            const st  = document.getElementById('ai-state');
+            if (lbl) lbl.textContent = 'listo';
+            if (st)  st.textContent  = 'En espera';
+          }, 2000);
+        }
+      }
+
+      // Observa mutaciones en #greet-msg para animar la respuesta
+      const observer = new MutationObserver(() => {
+        const msg = document.getElementById('greet-msg');
+        if (msg && msg.textContent.trim() !== '') {
+          msg.classList.add('has-content');
+          const placeholder = msg.querySelector('.bbl-placeholder');
+          if (placeholder) placeholder.remove();
+          const aiState = document.getElementById('ai-state');
+          if (aiState) aiState.textContent = 'Respondiendo...';
+        }
+      });
+      observer.observe(document.getElementById('greet-msg'), { childList: true, subtree: true, characterData: true });
+
+      // Parchea el botón de mic para interceptar clics y actualizar la UI
+      // El handler original en main.js sigue activo vía onclick
+      window.addEventListener('DOMContentLoaded', () => {
+        const micBtn = document.getElementById('mic-btn');
+        if (!micBtn) return;
+
+        // Guardamos el onclick que main.js asigna y lo envolvemos
+        const originalOnclick = micBtn.onclick;
+
+        // Usamos un wrapper que actualiza la UI antes de llamar al original
+        let uiRecording = false;
+        micBtn.addEventListener('click', () => {
+          uiRecording = !uiRecording;
+          setRecordingUI(uiRecording);
+        }, true); // capture: true → se ejecuta antes del onclick de main.js
+      });
+    </script>
+
   </body>
 </html>
