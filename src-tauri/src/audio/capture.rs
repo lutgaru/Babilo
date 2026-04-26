@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
- 
 //! Captura de audio desde hardware usando CPAL
 
 use crate::errors::{AppError, AudioError};
@@ -146,18 +145,42 @@ impl AudioCapture {
 
 pub fn list_input_devices() -> Result<Vec<AudioDeviceInfo>, AppError> {
     let host = cpal::default_host();
-    let default_name = host
-        .default_input_device()
-        .and_then(|d| d.description().ok().map(|desc| desc.name().to_string()));
+
+    let default_id = host.default_input_device().and_then(|d| d.id().ok());
 
     Ok(host
         .input_devices()
         .map_err(AudioError::DeviceConfig)?
         .filter_map(|device| {
-            device.description().ok().map(|desc| AudioDeviceInfo {
-                name: desc.name().to_string(),
-                is_default: desc.name() == default_name.as_deref().unwrap_or(""),
+            let desc = device.description().ok()?;
+            let id = device.id().ok();
+            let is_default = id.is_some() && id == default_id;
+
+            // Construye un nombre display usando los campos disponibles
+            let display_name = build_display_name(&desc);
+
+            Some(AudioDeviceInfo {
+                name: display_name,
+                is_default,
             })
         })
         .collect())
+}
+
+fn build_display_name(desc: &cpal::DeviceDescription) -> String {
+    // extended[0] tiene el nombre real: "Microphone (V8)", "Microphone (Steam Streaming Microphone)", etc.
+    if let Some(full_name) = desc.extended().first() {
+        return full_name.clone();
+    }
+
+    // Fallback si extended está vacío
+    let base = desc.name();
+    let interface_str = match desc.interface_type() {
+        cpal::InterfaceType::BuiltIn => " (Built-in)",
+        cpal::InterfaceType::Usb => " (USB)",
+        cpal::InterfaceType::Bluetooth => " (Bluetooth)",
+        _ => "",
+    };
+
+    format!("{}{}", base, interface_str)
 }
