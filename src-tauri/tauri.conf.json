@@ -4,10 +4,13 @@
   "version": "0.1.0",
   "identifier": "lutgaru.babilo-rs",
   "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
     "frontendDist": "../src"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [
       {
         "title": "babilo-rs",
