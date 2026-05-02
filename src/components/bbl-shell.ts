@@ -52,7 +52,7 @@ export class BblShell extends LitElement {
   }
 
   private async speak(text: string) {
-    this.response = 'Sintetizando...';
+    this.response = 'Sintetizing...';
     try {
       const wavBytes = await synthesize(text);
       const uint8    = new Uint8Array(wavBytes.map((b: number) => b < 0 ? b + 256 : b));
@@ -60,12 +60,12 @@ export class BblShell extends LitElement {
       if (uint8.length < 44) throw new Error(`Datos muy cortos: ${uint8.length} bytes`);
       if (new TextDecoder().decode(uint8.slice(0, 4)) !== 'RIFF') throw new Error('Header WAV inválido');
 
-      this.response = '▶ Reproduciendo...';
+      this.response = '▶ Speaking...';
       const audio   = new Audio(URL.createObjectURL(new Blob([uint8], { type: 'audio/wav' })));
 
       audio.onloadeddata = () => console.log('✅ Audio cargado:', audio.duration, 's');
       audio.onerror      = (e: any) => { this.response = `❌ Error: ${e.message}`; };
-      audio.onended      = ()       => { this.response = '✓ Listo'; };
+      audio.onended      = ()       => { this.response = '✓ Ready'; };
       await audio.play();
     } catch (err: any) {
       console.error('❌ speak error:', err);
@@ -123,7 +123,7 @@ export class BblShell extends LitElement {
   render() {
     return html`
       <bbl-top-bar
-        .status=${this.recording ? 'grabando' : this.aiState === 'idle' ? 'listo' : this.aiState}
+        .status=${this.recording ? 'Recording' : this.aiState === 'idle' ? 'Ready' : this.aiState}
         .seconds=${this.timerSecs}
         ?active=${this.recording}>
       </bbl-top-bar>

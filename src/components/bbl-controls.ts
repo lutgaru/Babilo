@@ -201,7 +201,7 @@ export class BblControls extends LitElement {
         <form class="input-row" @submit=${this._onSubmit}>
           <input id="greet-input"
                  type="text"
-                 placeholder="Escribe un prompt o prueba de voz..."
+                 placeholder="Write a prompt to test the AI response..."
                  autocomplete="off"/>
           <button type="submit" class="send-btn" title="Enviar">
             <svg viewBox="0 0 16 16" fill="currentColor">

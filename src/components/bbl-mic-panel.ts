@@ -116,7 +116,7 @@ export class BblMicPanel extends LitElement {
         </span>
         <div class="select-wrap">
           <select @change=${(e: Event) => { this.selected = (e.target as HTMLSelectElement).value; }}>
-            <option value="">Predeterminado</option>
+            <option value="">Default</option>
             ${this.devices.map(d => html`<option value=${d.name}>${d.name}</option>`)}
           </select>
           <span class="chevron">▾</span>

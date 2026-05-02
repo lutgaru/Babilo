@@ -9,10 +9,10 @@ import './bbl-transcript';
 export type AIState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 const STATE_LABELS: Record<AIState, string> = {
-  idle:       'En espera',
-  listening:  'Escuchando...',
-  processing: 'Procesando...',
-  speaking:   'Respondiendo...',
+  idle:       'Waiting...',
+  listening:  'Listening...',
+  processing: 'Processing...',
+  speaking:   'Speaking...',
 };
 
 export class BblStage extends LitElement {
@@ -186,7 +186,7 @@ export class BblStage extends LitElement {
       </div>
 
       <div class="ai-info">
-        <span class="ai-label">asistente</span>
+        <span class="ai-label">Assistant</span>
         <span class="ai-state">${STATE_LABELS[this.aiState as AIState]}</span>
       </div>
 
