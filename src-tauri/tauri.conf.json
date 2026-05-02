@@ -47,7 +47,8 @@
     ],
     "resources": [
       "../assets/*",
-      "../models/*"
+      "../models/*",
+      "../modes/*"
     ]
   }
 }

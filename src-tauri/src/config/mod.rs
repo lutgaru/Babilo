@@ -78,6 +78,21 @@ pub struct TtsConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct LearningModeConfig {
+    pub name: String,
+    pub system_prompt: String,
+}
+
+impl Default for LearningModeConfig {
+    fn default() -> Self {
+        Self {
+            name: "default".to_string(),
+            system_prompt: "You are a helpful assistant that learns from the user's audio input.".to_string(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct AeConfig {
     pub sample_rate: i32,
     pub base_chunk_size: i32,
@@ -105,6 +120,7 @@ pub struct AppConfig {
     pub audio: AudioConfig,
     pub llm: LlmConfig,
     pub tts: Option<TtsConfig>,
+    pub learning_mode: LearningModeConfig,
 }
 
 impl Default for AppConfig {
@@ -113,6 +129,7 @@ impl Default for AppConfig {
             audio: AudioConfig::default(),
             llm: LlmConfig::default(),
             tts: None, // Se carga desde tts.json en runtime
+            learning_mode: LearningModeConfig::default(),
         }
     }
 }
