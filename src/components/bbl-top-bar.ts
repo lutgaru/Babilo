@@ -14,7 +14,7 @@ export class BblTopBar extends LitElement {
 
   constructor() {
     super();
-    this.status  = 'listo';
+    this.status  = 'Ready';
     this.seconds = 0;
     this.active  = false;
   }

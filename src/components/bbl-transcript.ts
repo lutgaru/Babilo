@@ -53,11 +53,11 @@ export class BblTranscript extends LitElement {
   render() {
     return html`
       <div class="box">
-        <div class="label">respuesta</div>
+        <div class="label">Response</div>
         <p id="greet-msg">
           ${this.text
             ? this.text
-            : html`<span class="placeholder">Aquí aparecerá la respuesta del asistente...</span>`}
+            : html`<span class="placeholder">The AI response will appear here...</span>`}
         </p>
       </div>
     `;
