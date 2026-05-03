@@ -188,8 +188,8 @@ babilo-core/
 We use the [All Contributors](https://github.com/all-contributors/all-contributors) specification. Contributors will be featured here and on our official landing page hall of fame.
 
 <!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<a href="https://github.com/lutgaru/Babilo/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=lutgaru/Babilo" />
+<a href="https://github.com/lutgaru/babilo/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=lutgaru/babilo" />
 </a>
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
