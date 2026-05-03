@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
- 
 //! Lógica de inferencia: tokenización, generación, manejo de contexto
 
 use crate::{
@@ -19,7 +18,7 @@ use crate::{
 use llama_cpp_2::{
     context::LlamaContext,
     llama_batch::LlamaBatch,
-    model::{AddBos},
+    model::AddBos,
     mtmd::{mtmd_default_marker, MtmdBitmap, MtmdInputText},
     sampling::LlamaSampler,
     token::LlamaToken,
@@ -205,9 +204,11 @@ fn generate(
         LlamaSampler::dist(42),
     ]);
 
-    let mut output = String::new();
+    let mut output_bytes = Vec::new();
+    let mut batch = LlamaBatch::new(1, 1);
 
     for _ in 0..config.max_output_tokens {
+        batch.clear();
         let new_token = sampler.sample(ctx, -1);
         sampler.accept(new_token);
 
@@ -218,18 +219,15 @@ fn generate(
         if let Ok(bytes) = model.token_to_piece_bytes(new_token, 256, true, None) {
             let piece = String::from_utf8_lossy(&bytes);
 
-            if piece.contains("<end_of_turn>") || piece.contains("<start_of_turn>") {
-                break;
-            }
+            output_bytes.extend_from_slice(&bytes);
 
-            output.push_str(&piece);
-
-            if output.len() > 150 && piece.contains(|c: char| c == '.' || c == '!' || c == '?') {
+            if output_bytes.len() > 150
+                && piece.contains(|c: char| c == '.' || c == '!' || c == '?')
+            {
                 break;
             }
         }
 
-        let mut batch = LlamaBatch::new(1, 1);
         batch
             .add(new_token, state.n_past, &[0], true)
             .map_err(|e| LlmError::Decode(e.to_string()))?;
@@ -239,7 +237,7 @@ fn generate(
             .map_err(|e| LlmError::Decode(e.to_string()))?;
     }
 
-    Ok(output.trim().to_string())
+    Ok(String::from_utf8_lossy(&output_bytes).trim().to_string())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,37 +260,37 @@ fn bos_flag(state: &InferenceState) -> AddBos {
 fn build_text_prompt(prompt: &str, state: &InferenceState) -> String {
     if !state.system_prompt_evaluated {
         format!(
-            "<start_of_turn>user\n{}\n\n{}<end_of_turn>\n<start_of_turn>model\n",
+            "<|turn|>user\n{}\n\n{}<|turn|>\n<|turn|>model\n",
             system_instruction(),
             prompt,
         )
     } else {
         format!(
-            "<start_of_turn>user\n{}<end_of_turn>\n<start_of_turn>model\n",
+            "<|turn|>user\n{}<|turn|>\n<|turn|>model\n",
             prompt,
         )
     }
 }
 
 fn build_audio_prompt(prompt: &str, state: &InferenceState) -> String {
-    let marker = mtmd_default_marker();
-    let suffix = if prompt.is_empty() {
+    let marker = mtmd_default_marker(); // Asumiendo que es <|audio|>
+    let system = system_instruction();
+
+    let prompt_content = if prompt.is_empty() {
         String::new()
     } else {
-        format!("\n{}", prompt)
+        format!("\n{}", prompt.trim())
     };
 
     if !state.system_prompt_evaluated {
         format!(
-            "<start_of_turn>user\n{}\n\n{}{}<end_of_turn>\n<start_of_turn>model\n",
-            system_instruction(),
-            marker,
-            suffix,
+            "<|turn|>user\n{}\n{}{}<|turn|>\n<|turn|>model\n",
+            system, marker, prompt_content
         )
     } else {
         format!(
-            "<start_of_turn>user\n{}{}<end_of_turn>\n<start_of_turn>model\n",
-            marker, suffix,
+            "<|turn|>user\n{}{}<|turn|>\n<|turn|>model\n",
+            marker, prompt_content
         )
     }
 }
