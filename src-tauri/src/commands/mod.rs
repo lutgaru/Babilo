@@ -8,14 +8,19 @@
  * (at your option) any later version.
  */
 
- 
 //! Comandos Tauri exponibles al frontend
 
+use std::sync::Arc;
+
 use crate::{
-    audio::capture::AudioCapture, audio::list_input_devices, errors::AppError, state::AppState,
+    audio::capture::AudioCapture,
+    audio::list_input_devices,
+    errors::AppError,
+    schemas::{BabiloAnalysis, BabiloEvent, TokenEvent},
+    state::AppState,
 };
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{Emitter, State};
 
 // ─────────────────────────────────────────────────────────────
 // Structs de respuesta
@@ -156,6 +161,121 @@ pub async fn stop_and_process(
         }
         None => Ok(format!("[Echo] {}", prompt)),
     }
+}
+
+#[tauri::command]
+pub async fn stop_and_process_streaming(
+    prompt: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    eprint!(
+        "🛑 Stopping audio capture and processing with prompt: {}",
+        prompt
+    );
+    let (audio_raw, src_hz) = {
+        let mut lock = state.audio_capture.lock().map_err(|e| e.to_string())?;
+        let capture = lock.as_mut().ok_or("No active audio capture")?;
+        capture.stop().map_err(|e| e.to_string())?;
+        (capture.take_buffer(), capture.sample_rate())
+    };
+
+    if audio_raw.is_empty() {
+        eprintln!("⚠️ Audio buffer empty after capture");
+        return Err("Audio buffer empty".into());
+    }
+
+    let resampled = if src_hz != 16000 {
+        crate::audio::MelPreprocessor::resample(&audio_raw, src_hz as f32, 16000.0)
+    } else {
+        audio_raw
+    };
+
+    // ← Extract Arcs BEFORE spawn_blocking, while State<'_> is still in scope
+    let tts_engine = Arc::clone(&state.tts_engine);
+    let llm_engine = Arc::clone(&state.llm_engine);
+    let app_clone = app.clone();
+    eprint!("🎬 Starting inference with prompt: ");
+    tauri::async_runtime::spawn_blocking(move || {
+        let emit = |event: BabiloEvent| {
+            let _ = app_clone.emit("babilo://stream", &event);
+        };
+
+        let (tts_tx, tts_rx) = std::sync::mpsc::channel::<String>();
+
+        // tts_engine is an owned Arc now — no borrow of State<'_>
+        let tts_handle = std::thread::spawn(move || {
+            let mut lock = tts_engine.lock().unwrap();
+            let tts = match lock.as_mut() {
+                Some(t) => t,
+                None => return,
+            };
+            while let Ok(sentence) = tts_rx.recv() {
+                let _ = tts.speak_and_play(&sentence, "F1", "en", 1.5, 30);
+                eprint!("🎤 TTS spoke: {}", sentence);
+            }
+        });
+
+        let mut llm_lock = llm_engine.lock().unwrap();
+        match llm_lock.as_mut() {
+            None => emit(BabiloEvent::Error {
+                message: "LLM not initialized".into(),
+            }),
+            Some(model) => {
+                if model.model().context_is_full(model.state().n_past, 256) {
+                    let _ = model.reset();
+                }
+
+                let mut tts_sentence_buf = String::new();
+                let mut analysis_buf = String::new();
+
+                let mut tts_tx_opt = Some(tts_tx); // wrap in Option so we can take() it
+
+                let infer_result =
+                    model.infer_audio_streaming(&resampled, &prompt, |event| match event {
+                        TokenEvent::ResponseToken(text) => {
+                            tts_sentence_buf.push_str(&text);
+                        }
+                        TokenEvent::SentinelReached => {
+                            let full_response = tts_sentence_buf.trim().to_string();
+                            if !full_response.is_empty() {
+                                if let Some(tx) = &tts_tx_opt {
+                                    let _ = tx.send(full_response);
+                                }
+                                tts_sentence_buf.clear();
+                            }
+                            emit(BabiloEvent::SentinelReached);
+                        }
+                        TokenEvent::AnalysisToken(text) => {
+                            analysis_buf.push_str(&text);
+                        }
+                        TokenEvent::Done => {
+                            // ← Drop tx HERE so TTS thread exits after last speak()
+                            drop(tts_tx_opt.take());
+
+                            match BabiloAnalysis::from_inference(&analysis_buf) {
+                                Ok(data) => emit(BabiloEvent::Analysis { data }),
+                                Err(e) => emit(BabiloEvent::Error {
+                                    message: e.to_string(),
+                                }),
+                            }
+                        }
+                    });
+
+                if let Err(e) = infer_result {
+                    emit(BabiloEvent::Error {
+                        message: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        let _ = tts_handle.join();
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
 
 #[tauri::command]

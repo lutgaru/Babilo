@@ -23,6 +23,7 @@ pub mod llama;
 pub mod state;
 pub mod tts;
 pub mod utils;
+pub mod schemas; 
 
 // Re-export de commands para el macro
 pub use commands::*;
@@ -38,6 +39,7 @@ pub fn run() {
             commands::list_audio_devices,
             commands::start_listening,
             commands::stop_and_process,
+            commands::stop_and_process_streaming,
             commands::test_inference,
             commands::reset_conversation,
             commands::get_context_usage,
@@ -91,8 +93,8 @@ pub fn run() {
             // Configurar estado global
             app.manage(AppState {
                 config: config::AppConfig::default(),
-                tts_engine: std::sync::Mutex::new(tts_engine),
-                llm_engine: std::sync::Mutex::new(llm_engine),
+                tts_engine: std::sync::Arc::new(std::sync::Mutex::new(tts_engine)),
+                llm_engine: std::sync::Arc::new(std::sync::Mutex::new(llm_engine)),
                 audio_capture: std::sync::Mutex::new(None),
                 audio_stream: std::sync::Mutex::new(None),
                 audio_buffer: std::sync::Arc::new(std::sync::Mutex::new(

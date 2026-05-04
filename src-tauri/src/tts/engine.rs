@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
- 
 //! Motor TTS: inferencia ONNX para síntesis de voz
 
 use crate::{
@@ -16,10 +15,11 @@ use crate::{
     errors::{AppError, TtsError},
     tts::utils::{load_voice_style, UnicodeProcessor},
 };
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ort::{inputs, session::Session, value::Tensor};
 use rand::rngs::ThreadRng;
 use rand_distr::{Distribution, Normal};
-use std::path::{ PathBuf};
+use std::path::PathBuf;
 use tauri::AppHandle;
 
 trait OrtResultExt<T> {
@@ -76,6 +76,71 @@ impl TtsEngine {
             assets_dir,
             app_handle,
         })
+    }
+
+    pub fn speak_and_play(
+        &mut self,
+        text: &str,
+        voice_id: &str,
+        lang: &str,
+        speed: f32,
+        denoising_steps: usize,
+    ) -> Result<(), AppError> {
+        let wav_bytes = self.speak(text, voice_id, lang, speed, denoising_steps)?;
+        let wav_u8: Vec<u8> = wav_bytes.iter().map(|&b| b as u8).collect();
+
+        // Parse WAV header to get sample rate + samples
+        let mut cursor = std::io::Cursor::new(&wav_u8);
+        let (header, samples) = parse_wav(&mut cursor)?;
+
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .ok_or_else(|| TtsError::AudioGeneration("No output device".into()))?;
+
+        let config = cpal::StreamConfig {
+            channels: header.channels,
+            sample_rate: header.sample_rate,
+            buffer_size: cpal::BufferSize::Default,
+        };
+
+        let samples = std::sync::Arc::new(samples);
+        let samples_clone = samples.clone();
+        let pos = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let pos_clone = pos.clone();
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let done_clone = done.clone();
+
+        let stream = device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f32], _| {
+                    let p = pos_clone.load(std::sync::atomic::Ordering::Relaxed);
+                    for (i, sample) in data.iter_mut().enumerate() {
+                        if p + i < samples_clone.len() {
+                            *sample = samples_clone[p + i];
+                        } else {
+                            *sample = 0.0;
+                            done_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                    }
+                    pos_clone.fetch_add(data.len(), std::sync::atomic::Ordering::Relaxed);
+                },
+                |err| eprintln!("TTS playback error: {err}"),
+                None,
+            )
+            .map_err(|e| TtsError::AudioGeneration(e.to_string()))?;
+
+        stream
+            .play()
+            .map_err(|e| TtsError::AudioGeneration(e.to_string()))?;
+
+        // Block until done
+        while !done.load(std::sync::atomic::Ordering::Relaxed) {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+
+        Ok(())
     }
 
     /// Sintetizar texto a audio
@@ -270,4 +335,49 @@ impl TtsEngine {
             })
             .unwrap_or_default()
     }
+}
+fn parse_wav(cursor: &mut std::io::Cursor<&Vec<u8>>) -> Result<(WavHeader, Vec<f32>), AppError> {
+    use std::io::Read;
+    let mut header = [0u8; 44];
+    cursor
+        .read_exact(&mut header)
+        .map_err(|e| TtsError::AudioGeneration(e.to_string()))?;
+
+    let channels = u16::from_le_bytes([header[22], header[23]]);
+    let sample_rate = u32::from_le_bytes([header[24], header[25], header[26], header[27]]);
+    let bits_per_sample = u16::from_le_bytes([header[34], header[35]]);
+
+    let mut raw = Vec::new();
+    cursor
+        .read_to_end(&mut raw)
+        .map_err(|e| TtsError::AudioGeneration(e.to_string()))?;
+
+    let samples: Vec<f32> = match bits_per_sample {
+        16 => raw
+            .chunks_exact(2)
+            .map(|c| i16::from_le_bytes([c[0], c[1]]) as f32 / 32768.0)
+            .collect(),
+        32 => raw
+            .chunks_exact(4)
+            .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect(),
+        _ => {
+            return Err(
+                TtsError::AudioGeneration(format!("Unsupported bits: {bits_per_sample}")).into(),
+            )
+        }
+    };
+
+    Ok((
+        WavHeader {
+            channels,
+            sample_rate,
+        },
+        samples,
+    ))
+}
+
+struct WavHeader {
+    channels: u16,
+    sample_rate: u32,
 }

@@ -8,17 +8,16 @@
  * (at your option) any later version.
  */
 
- 
 //! Gestión del estado global de la aplicación
 
-use std::sync::{Arc, Mutex};
 use cpal::traits::StreamTrait;
+use std::sync::{Arc, Mutex};
 
 use crate::{
     audio::{AudioCapture, MelPreprocessor},
+    config::AppConfig,
     llama::InferenceEngine,
     tts::TtsEngine,
-    config::AppConfig,
 };
 
 /// Wrapper seguro para cpal::Stream (no Send por defecto)
@@ -81,25 +80,25 @@ impl AudioStreamHandle {
 pub struct AppState {
     /// Configuración de la aplicación
     pub config: AppConfig,
-    
+
     /// Motor TTS (ONNX)
-    pub tts_engine: Mutex<Option<TtsEngine>>,
-    
+    pub tts_engine: Arc<Mutex<Option<TtsEngine>>>,
+
     /// Motor LLM (llama.cpp)
-    pub llm_engine: Mutex<Option<InferenceEngine>>,
-    
+    pub llm_engine: Arc<Mutex<Option<InferenceEngine>>>,
+
     /// Capturador de audio (hardware)
     pub audio_capture: Mutex<Option<AudioCapture>>,
-    
+
     /// Handle al stream activo de CPAL
     pub audio_stream: Mutex<Option<AudioStreamHandle>>,
-    
+
     /// Buffer compartido para samples de audio
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
-    
+
     /// Frecuencia de muestreo actual del dispositivo
     pub sample_rate: Mutex<u32>,
-    
+
     /// Preprocesador de features (Mel/FFT)
     pub preprocessor: MelPreprocessor,
 }
@@ -116,8 +115,8 @@ impl AppState {
 
         Self {
             config,
-            tts_engine: Mutex::new(None),
-            llm_engine: Mutex::new(None),
+            tts_engine: Arc::new(Mutex::new(None)),
+            llm_engine: Arc::new(Mutex::new(None)),
             audio_capture: Mutex::new(None),
             audio_stream: Mutex::new(None),
             audio_buffer: Arc::new(Mutex::new(Vec::with_capacity(16000 * 30))),
