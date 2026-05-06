@@ -65,7 +65,7 @@ export class BblControls extends LitElement {
     return html`
       <footer class="
         bg-[var(--bbl-surface)]
-        border-t border-t-[0.5px] border-[var(--bbl-border)]
+        border-t-[0.5px] border-[var(--bbl-border)]
         pt-4 pb-5 px-5
         flex flex-col gap-[14px]
       ">
@@ -80,7 +80,7 @@ export class BblControls extends LitElement {
             title="Silenciar"
             class="
               w-12 h-12 rounded-full
-              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
               flex items-center justify-center
               text-[var(--bbl-text-muted)]
               transition-[background,color] duration-150
@@ -100,7 +100,7 @@ export class BblControls extends LitElement {
             title="Volumen"
             class="
               w-12 h-12 rounded-full
-              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
               flex items-center justify-center
               text-[var(--bbl-text-muted)]
               transition-[background,color] duration-150
@@ -144,7 +144,7 @@ export class BblControls extends LitElement {
             title="Configuración"
             class="
               w-12 h-12 rounded-full
-              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
               flex items-center justify-center
               text-[var(--bbl-text-muted)]
               transition-[background,color] duration-150
@@ -164,7 +164,7 @@ export class BblControls extends LitElement {
             title="Colgar"
             class="
               w-12 h-12 rounded-full
-              bg-[var(--bbl-accent-dim)] border border-[0.5px] border-[var(--bbl-accent-ring)]
+              bg-[var(--bbl-accent-dim)] border-[0.5px] border-[var(--bbl-accent-ring)]
               flex items-center justify-center
               text-[var(--bbl-accent)]
               transition-[background,transform] duration-150
@@ -190,7 +190,7 @@ export class BblControls extends LitElement {
             autocomplete="off"
             class="
               flex-1
-              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
               rounded-[var(--bbl-radius-pill)]
               px-[18px] py-[9px]
               text-[14px] text-[var(--bbl-text)]

@@ -113,7 +113,7 @@ export class BblTranscript extends LitElement {
                       ${msg.role === 'ai' ? 'items-start' : 'items-end'}">
 
             <div class="
-              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
               py-[14px] px-[18px]
               text-[14px] leading-relaxed text-[var(--bbl-text)]
               max-w-[85%] break-words

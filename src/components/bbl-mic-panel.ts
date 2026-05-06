@@ -80,7 +80,7 @@ export class BblMicPanel extends LitElement {
           <select
             class="
               w-full
-              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
               rounded-[var(--bbl-radius-sm)]
               py-[7px] pl-3 pr-7
               text-[13px] text-[var(--bbl-text)]
@@ -109,7 +109,7 @@ export class BblMicPanel extends LitElement {
           class="
             w-8 h-8 flex-shrink-0
             rounded-[var(--bbl-radius-sm)]
-            bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+            bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
             flex items-center justify-center
             text-[var(--bbl-text-muted)]
             transition-[background,color] duration-150
