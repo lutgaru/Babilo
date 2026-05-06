@@ -5,12 +5,24 @@
 
 import { LitElement, html, css } from 'lit';
 import './bbl-transcript';
+import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
+
+import './bbl-transcript';
 
 export class BblStage extends LitElement {
   static properties = {
     aiState: { type: String },
     messages: { type: Array },
   };
+
+
+  connectedCallback() {
+    super.connectedCallback();
+    // ✅ Inyectar Tailwind en este shadow root
+    if (this.shadowRoot) {
+      applyTailwindToShadowRoot(this.shadowRoot);
+    }
+  }
 
   static styles = css`
     :host {
@@ -24,95 +36,29 @@ export class BblStage extends LitElement {
       overflow: hidden;
     }
 
-    .avatar-wrap {
-      position: relative;
-      width: 160px;
-      height: 160px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .ring {
-      position: absolute;
-      border-radius: 50%;
-      border: 1px solid;
-      pointer-events: none;
-    }
-    .ring-a { width: 160px; height: 160px; border-color: var(--bbl-ring-a); }
-    .ring-b { width: 128px; height: 128px; border-color: var(--bbl-ring-b); }
-    .ring-c { width: 98px; height: 98px; border-color: var(--bbl-ring-c); background: var(--bbl-ring-c); }
-
-    .avatar {
-      width: 76px;
-      height: 76px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, var(--bbl-accent2) 0%, var(--bbl-accent) 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      font-weight: 600;
-      color: #fff;
-      position: relative;
-      z-index: 2;
-      border: 1.5px solid rgba(255, 255, 255, 0.15);
-      letter-spacing: 0.04em;
-    }
-
+    /* ── Animations (impossible in Tailwind utilities) ── */
     @keyframes pulse-a {
-      0% { transform: scale(1); opacity: 0.7; }
-      100% { transform: scale(1.15); opacity: 0; }
+      0%   { transform: scale(1);    opacity: 0.7; }
+      100% { transform: scale(1.15); opacity: 0;   }
     }
     @keyframes pulse-b {
-      0% { transform: scale(1); opacity: 0.5; }
-      100% { transform: scale(1.12); opacity: 0; }
+      0%   { transform: scale(1);    opacity: 0.5; }
+      100% { transform: scale(1.12); opacity: 0;   }
+    }
+    @keyframes wave-idle {
+      0%, 100% { height: 4px;  }
+      50%       { height: 10px; }
+    }
+    @keyframes wave-live {
+      0%, 100% { height: 5px;  }
+      50%       { height: 26px; }
     }
 
+    /* ── Pulsing rings (state-dependent animation) ── */
     .pulsing .ring-a { animation: pulse-a 1.6s ease-out infinite; }
     .pulsing .ring-b { animation: pulse-b 1.6s 0.3s ease-out infinite; }
 
-    .ai-info {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-    }
-    .ai-label {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--bbl-text-faint);
-    }
-    .ai-state {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--bbl-text);
-      min-height: 22px;
-    }
-
-    .waveform {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      height: 32px;
-    }
-
-    .bar {
-      width: 3px;
-      height: 5px;
-      border-radius: 2px;
-      background: var(--bbl-text-faint);
-      opacity: 0.5;
-    }
-    .bar.active {
-      background: var(--bbl-accent2);
-      opacity: 0.7;
-    }
-
-    @keyframes wave-idle { 0%, 100% { height: 4px; } 50% { height: 10px; } }
-    @keyframes wave-live { 0%, 100% { height: 5px; } 50% { height: 26px; } }
-
+    /* ── Waveform idle animations (nth-child impossible in Tailwind) ── */
     .bar:nth-child(1)  { animation: wave-idle 2.2s 0.0s ease-in-out infinite; }
     .bar:nth-child(2)  { animation: wave-idle 2.4s 0.2s ease-in-out infinite; }
     .bar:nth-child(3)  { animation: wave-idle 2.1s 0.1s ease-in-out infinite; }
@@ -131,6 +77,7 @@ export class BblStage extends LitElement {
     .bar.active:nth-child(11) { animation: wave-idle 1.9s 0.2s ease-in-out infinite; }
     .bar.active:nth-child(12) { animation: wave-idle 1.7s 0.0s ease-in-out infinite; }
 
+    /* ── Live state overrides ── */
     .waveform.live .bar.active { background: var(--bbl-accent); opacity: 1; }
     .waveform.live .bar.active:nth-child(5)  { animation: wave-live 0.90s 0.00s ease-in-out infinite; }
     .waveform.live .bar.active:nth-child(6)  { animation: wave-live 0.80s 0.10s ease-in-out infinite; }
@@ -141,35 +88,35 @@ export class BblStage extends LitElement {
     .waveform.live .bar.active:nth-child(11) { animation: wave-live 1.00s 0.15s ease-in-out infinite; }
     .waveform.live .bar.active:nth-child(12) { animation: wave-live 0.90s 0.05s ease-in-out infinite; }
 
+    /* ── Responsive (media queries can't be done in Tailwind shadow DOM) ── */
     @media (max-height: 600px) {
       :host { gap: 14px; padding: 18px 20px; }
-      .avatar-wrap { width: 120px; height: 120px; }
-      .ring-a { width: 120px; height: 120px; }
-      .ring-b { width: 96px; height: 96px; }
-      .ring-c { width: 74px; height: 74px; }
-      .avatar { width: 60px; height: 60px; font-size: 18px; }
     }
   `;
+
+  connectedCallback() {
+    super.connectedCallback();
+    if (this.shadowRoot) {
+      applyTailwindToShadowRoot(this.shadowRoot);
+    }
+  }
 
   constructor() {
     super();
     this.aiState = 'idle';
-    /** @type {Array<{ role: 'user' | 'ai'; content: string; timestamp?: number }>} */
     this.messages = [];
   }
 
-  /** @private */
   get pulsing() {
     return this.aiState === 'listening' || this.aiState === 'speaking';
   }
 
-  /** @private */
   get live() {
     return this.aiState === 'listening';
   }
 
   render() {
-    const STATE_LABELS = {
+    const STATE_LABELS: Record<string, string> = {
       idle: 'Waiting...',
       listening: 'Listening...',
       processing: 'Processing...',
@@ -177,29 +124,79 @@ export class BblStage extends LitElement {
     };
 
     return html`
-      <div class="avatar-wrap ${this.pulsing ? 'pulsing' : ''}">
-        <div class="ring ring-c"></div>
-        <div class="ring ring-b"></div>
-        <div class="ring ring-a"></div>
-        <div class="avatar">AI</div>
+      <!-- Avatar + rings -->
+      <div class="avatar-wrap ${this.pulsing ? 'pulsing' : ''}
+                  relative w-40 h-40 flex items-center justify-center">
+
+        <!-- ring-c: filled innermost -->
+        <div class="ring ring-c
+                    absolute rounded-full pointer-events-none
+                    w-[98px] h-[98px]
+                    border border-[var(--bbl-ring-c)] bg-[var(--bbl-ring-c)]">
+        </div>
+
+        <!-- ring-b -->
+        <div class="ring ring-b
+                    absolute rounded-full pointer-events-none
+                    w-32 h-32
+                    border border-[var(--bbl-ring-b)]">
+        </div>
+
+        <!-- ring-a: outermost -->
+        <div class="ring ring-a
+                    absolute rounded-full pointer-events-none
+                    w-40 h-40
+                    border border-[var(--bbl-ring-a)]">
+        </div>
+
+        <!-- avatar circle -->
+        <div class="avatar
+                    relative z-[2]
+                    w-[76px] h-[76px] rounded-full
+                    bg-gradient-to-br from-[var(--bbl-accent2)] to-[var(--bbl-accent)]
+                    flex items-center justify-center
+                    text-[22px] font-semibold text-white
+                    border border-white/15 tracking-[0.04em]">
+          AI
+        </div>
       </div>
 
-      <div class="ai-info">
-        <span class="ai-label">Assistant</span>
-        <span class="ai-state">${STATE_LABELS[this.aiState]}</span>
+      <!-- AI label + state -->
+      <div class="flex flex-col items-center gap-0.5">
+        <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">
+          Assistant
+        </span>
+        <span class="text-[15px] font-medium text-[var(--bbl-text)] min-h-[22px]">
+          ${STATE_LABELS[this.aiState] ?? ''}
+        </span>
       </div>
 
-      <div class="waveform ${this.live ? 'live' : ''}" aria-hidden="true">
-        <div class="bar"></div><div class="bar"></div>
-        <div class="bar"></div><div class="bar"></div>
-        <div class="bar active"></div><div class="bar active"></div>
-        <div class="bar active"></div><div class="bar active"></div>
-        <div class="bar active"></div><div class="bar active"></div>
-        <div class="bar active"></div><div class="bar active"></div>
-        <div class="bar"></div><div class="bar"></div>
-        <div class="bar"></div><div class="bar"></div>
+      <!-- Waveform -->
+      <div class="waveform ${this.live ? 'live' : ''}
+                  flex items-center gap-[3px] h-8"
+           aria-hidden="true">
+        <!-- outer-left (no active) -->
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <!-- active center bars -->
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <div class="bar active w-[3px] h-[5px] rounded-sm bg-[var(--bbl-accent2)] opacity-70"></div>
+        <!-- outer-right (no active) -->
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
+        <div class="bar w-[3px] h-[5px] rounded-sm bg-[var(--bbl-text-faint)] opacity-50"></div>
       </div>
 
+      <!-- Transcript -->
       <bbl-transcript
         id="chat"
         .messages=${this.messages}>

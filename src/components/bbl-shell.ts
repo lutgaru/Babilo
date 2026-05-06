@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
 import { startListening, stopAndProcess2, synthesize, testInference } from '../invoke';
 import { listen } from '@tauri-apps/api/event';
@@ -24,17 +25,17 @@ export class BblShell extends LitElement {
     messages: { state: true },
   };
 
-  static styles = css`
-    :host {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      height: 100dvh;
-      margin: 0 auto;
-      background: var(--bbl-bg);
-      border-left: 0.5px solid var(--bbl-border);
-      border-right: 0.5px solid var(--bbl-border);
-    }
-  `;
+connectedCallback() {
+  super.connectedCallback();
+  if (this.shadowRoot) {
+    applyTailwindToShadowRoot(this.shadowRoot);
+  }
+}
+
+static styles = css`
+  :host { display: block; }
+  /* Solo CSS personalizado que NO puede ser utility */
+`;
 
   constructor() {
     super();

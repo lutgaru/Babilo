@@ -4,10 +4,11 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
 export class BblTranscript extends LitElement {
   static properties = {
-    messages: { type: Array },
+    messages:    { type: Array },
     maxMessages: { type: Number },
   };
 
@@ -16,101 +17,45 @@ export class BblTranscript extends LitElement {
       display: block;
       width: 100%;
       max-width: 440px;
-      --bbl-chat-gap: 12px;
-      --bbl-chat-padding: 14px 18px;
     }
 
-    .container {
-      display: flex;
-      flex-direction: column;
-      gap: var(--bbl-chat-gap);
-      max-height: 200px;
-      overflow-y: auto;
-      padding: 4px;
-      scroll-behavior: smooth;
-    }
+    /* ── Impossible in Tailwind ── */
 
-    .container::-webkit-scrollbar { width: 4px; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+    .message { animation: fadeIn 0.2s ease-out; }
+
+    .container::-webkit-scrollbar       { width: 4px; }
     .container::-webkit-scrollbar-track { background: transparent; }
     .container::-webkit-scrollbar-thumb {
       background: var(--bbl-border);
       border-radius: 2px;
     }
-
-    .message {
-      display: flex;
-      flex-direction: column;
-      animation: fadeIn 0.2s ease-out;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .bubble {
-      background: var(--bbl-btn-bg);
-      border: 0.5px solid var(--bbl-border);
-      border-radius: var(--bbl-radius-md);
-      padding: var(--bbl-chat-padding);
-      font-size: 14px;
-      line-height: 1.6;
-      color: var(--bbl-text);
-      max-width: 85%;
-      word-wrap: break-word;
-    }
-
-    .message.ai { align-self: flex-start; }
-    .message.ai .bubble { border-bottom-left-radius: 4px; }
-
-    .message.user { align-self: flex-end; }
-    .message.user .bubble {
-      background: var(--bbl-primary, var(--bbl-btn-bg));
-      border-color: var(--bbl-primary-border, var(--bbl-border));
-      border-bottom-right-radius: 4px;
-      color: var(--bbl-text-on-primary, var(--bbl-text));
-    }
-
-    .meta {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: var(--bbl-text-faint);
-      margin: 4px 2px 0;
-    }
-    .message.ai .meta { align-self: flex-start; }
-    .message.user .meta { align-self: flex-end; }
-
-    .placeholder {
-      color: var(--bbl-text-faint);
-      font-style: italic;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 24px 18px;
-      color: var(--bbl-text-faint);
-      font-size: 13px;
-    }
   `;
+
+  connectedCallback() {
+    super.connectedCallback();
+    if (this.shadowRoot) {
+      applyTailwindToShadowRoot(this.shadowRoot);
+    }
+  }
 
   constructor() {
     super();
-    /** @type {Array<{ role: 'user' | 'ai'; content: string; timestamp?: number }>} */
-    this.messages = [];
+    this.messages    = [];
     this.maxMessages = 50;
-    /** @type {HTMLDivElement | null} */
     this._scrollContainer = null;
   }
 
-  /** @type {HTMLDivElement | null} */
-  _scrollContainer;
+  _scrollContainer: HTMLDivElement | null;
 
-  /**
-   * Add a new message to the transcript
-   * @param {{ role: 'user' | 'ai'; content: string; timestamp?: number }} param0
-   */
-  addMessage({ role, content, timestamp = Date.now() }) {
+  addMessage({ role, content, timestamp = Date.now() }: {
+    role: 'user' | 'ai';
+    content: string;
+    timestamp?: number;
+  }) {
     const newMessages = [...this.messages, { role, content, timestamp }];
     this.messages = newMessages.length > this.maxMessages
       ? newMessages.slice(-this.maxMessages)
@@ -118,35 +63,26 @@ export class BblTranscript extends LitElement {
     this.updateComplete.then(() => this._scrollToBottom());
   }
 
-  /** Clear all messages */
   clear() {
     this.messages = [];
   }
 
-  /**
-   * Format timestamp to readable time
-   * @private
-   */
-  _formatTime(ts) {
+  private _formatTime(ts: number) {
     return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
-  /**
-   * Scroll to bottom of container
-   * @private
-   */
-  _scrollToBottom() {
+  private _scrollToBottom() {
     if (this._scrollContainer) {
       this._scrollContainer.scrollTop = this._scrollContainer.scrollHeight;
     }
   }
 
   firstUpdated() {
-    this._scrollContainer = this.shadowRoot?.querySelector('.container');
+    this._scrollContainer = this.shadowRoot?.querySelector('.container') ?? null;
     this._scrollToBottom();
   }
 
-  updated(changedProps) {
+  updated(changedProps: Map<string, unknown>) {
     if (changedProps.has('messages')) {
       this._scrollToBottom();
     }
@@ -155,22 +91,48 @@ export class BblTranscript extends LitElement {
   render() {
     if (this.messages.length === 0) {
       return html`
-        <div class="box">
-          <div class="empty-state">
-            <span class="placeholder">The conversation will appear here...</span>
-          </div>
+        <div class="flex items-center justify-center py-6 px-[18px]">
+          <span class="text-[13px] italic text-[var(--bbl-text-faint)]">
+            The conversation will appear here...
+          </span>
         </div>
       `;
     }
 
     return html`
-      <div class="container">
-        ${this.messages.map((msg) => html`
-          <div class="message ${msg.role}">
-            <div class="bubble">${msg.content}</div>
-            ${msg.timestamp 
-              ? html`<span class="meta">${this._formatTime(msg.timestamp)}</span>` 
-              : ''}
+      <div class="container
+                  flex flex-col gap-3
+                  max-h-[200px] overflow-y-auto
+                  p-1 scroll-smooth">
+        ${this.messages.map((msg: any) => html`
+          <div class="message
+                      flex flex-col
+                      ${msg.role === 'ai' ? 'items-start' : 'items-end'}">
+
+            <div class="
+              bg-[var(--bbl-btn-bg)] border border-[0.5px] border-[var(--bbl-border)]
+              py-[14px] px-[18px]
+              text-[14px] leading-relaxed text-[var(--bbl-text)]
+              max-w-[85%] break-words
+              ${msg.role === 'ai'
+                ? 'rounded-[var(--bbl-radius-md)] rounded-bl-[4px]'
+                : 'rounded-[var(--bbl-radius-md)] rounded-br-[4px] bg-[var(--bbl-primary,var(--bbl-btn-bg))] border-[var(--bbl-primary-border,var(--bbl-border))] text-[var(--bbl-text-on-primary,var(--bbl-text))]'
+              }
+            ">
+              ${msg.content}
+            </div>
+
+            ${msg.timestamp ? html`
+              <span class="
+                text-[10px] uppercase tracking-[0.1em]
+                text-[var(--bbl-text-faint)]
+                mt-1 mx-0.5
+                ${msg.role === 'ai' ? 'self-start' : 'self-end'}
+              ">
+                ${this._formatTime(msg.timestamp)}
+              </span>
+            ` : ''}
+
           </div>
         `)}
       </div>
