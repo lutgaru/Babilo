@@ -7,8 +7,8 @@ import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import './bbl-transcript';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
+import { AIState } from '../types/babilo';
 
-type AIState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export class BblStage extends LitElement {
   // ── Reactive Properties ──
@@ -110,6 +110,7 @@ export class BblStage extends LitElement {
       listening: 'Listening...',
       processing: 'Processing...',
       speaking: 'Speaking...',
+      thinking: 'Thinking...'
     };
 
     return html`

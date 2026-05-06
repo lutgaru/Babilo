@@ -7,9 +7,7 @@ import { LitElement, html, css } from 'lit';
 import { state } from 'lit/decorators.js';
 import { listAudioDevices } from '../invoke';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
-
-// ── Types ──
-type AudioDevice = { name: string; id?: string }; // Adjust based on your actual backend response
+import { AudioDevice } from '../types/babilo';
 
 export class BblMicPanel extends LitElement {
   // ── Reactive State Properties ──

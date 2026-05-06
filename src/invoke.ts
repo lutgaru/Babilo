@@ -4,8 +4,9 @@
  */
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+import { AudioDevice } from './types/babilo';
 
-export const listAudioDevices = () => tauriInvoke('list_audio_devices');
+export const listAudioDevices = () : Promise<AudioDevice[]> => tauriInvoke('list_audio_devices');
 export const startListening = (deviceName: string | null) => tauriInvoke('start_listening', { deviceName });
 export const stopAndProcess = (prompt: string) => tauriInvoke('stop_and_process', { prompt });
 export const synthesize = (text: string) => tauriInvoke('synthesize', { text, voice: 'F1' });

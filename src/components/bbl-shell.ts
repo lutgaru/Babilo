@@ -6,15 +6,14 @@
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
 import { state } from 'lit/decorators.js';
-import { startListening, stopAndProcess2} from '../invoke';
+import { startListening, stopAndProcess2 } from '../invoke';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { AIState, Message, StreamEvent } from '../types/babilo';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-mic-panel';
 import './bbl-controls';
 
-type AIState = 'idle' | 'listening' | 'thinking' | 'processing' | 'speaking';
-type Message = { role: 'user' | 'ai'; content: string; timestamp?: number };
 type Correction = unknown; // Adjust based on your actual correction structure
 
 export class BblShell extends LitElement {
@@ -122,7 +121,7 @@ export class BblShell extends LitElement {
         this.corrections = event.data.corrections;
         this.score = event.data.score;
         this.nextStepHint = event.data.next_step_hint ?? null;
-        
+
         console.log('📊 Analysis:', {
           transcription: this.transcription,
           corrections: this.corrections,
@@ -143,10 +142,10 @@ export class BblShell extends LitElement {
 
   // ── Render ──
   render() {
-    const statusText = this.recording 
-      ? 'Recording' 
-      : this.aiState === 'idle' 
-        ? 'Ready' 
+    const statusText = this.recording
+      ? 'Recording'
+      : this.aiState === 'idle'
+        ? 'Ready'
         : this.aiState;
 
     return html`
@@ -170,19 +169,5 @@ export class BblShell extends LitElement {
     `;
   }
 }
-
-// ── Stream Event Type (adjust to match your backend) ──
-type StreamEvent =
-  | { type: 'sentinel_reached' }
-  | {
-      type: 'analysis';
-      data: {
-        transcription: string;
-        corrections: Correction[];
-        score: number | null;
-        next_step_hint?: string | null;
-      };
-    }
-  | { type: 'error'; message: string };
 
 customElements.define('bbl-shell', BblShell);
