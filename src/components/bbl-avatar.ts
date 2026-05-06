@@ -105,8 +105,6 @@ export class BblAvatar extends LitElement {
       border: 1px solid rgba(255, 255, 255, 0.15);
       letter-spacing: 0.04em;
       user-select: none;
-      /* Opcional: leve "respiración" en el avatar también */
-      animation: pulse-idle 5s ease-in-out infinite;
     }
   `;
 
