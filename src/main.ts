@@ -4,4 +4,8 @@
  */
 
 import './styles.css';
+import './tailwind.css';
+import { loadTailwindSheet } from './lib/tailwind-styles';
 import './components/bbl-shell';
+
+loadTailwindSheet().catch(err => console.error('❌ Error loading Tailwind sheet:', err));

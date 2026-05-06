@@ -10,116 +10,87 @@
 
 /* ═══════════════════════════════════════════════════════════════════
    TOKENS DE TEMA
-   Para tema claro:  [data-theme="light"] { ... }
-   Para tema custom: [data-theme="brand"]  { ... }
    ═══════════════════════════════════════════════════════════════════ */
-
 :root {
   /* Fondos */
   --bbl-bg:          #111118;
   --bbl-surface:     #18181f;
   --bbl-surface-alt: #1e1e28;
   --bbl-panel:       #23232e;
-
   /* Texto */
   --bbl-text:        #eeeef2;
   --bbl-text-muted:  #8080a0;
   --bbl-text-faint:  #4a4a60;
-
-  /* Acento principal (micrófono activo, marca) */
+  /* Acentos */
   --bbl-accent:      #e0446a;
   --bbl-accent-dim:  rgba(224, 68, 106, 0.15);
   --bbl-accent-ring: rgba(224, 68, 106, 0.35);
-
-  /* Acento secundario (avatar, botón mic idle) */
   --bbl-accent2:     #5e3fbe;
-  --bbl-accent2-dim: rgba(94, 63, 190, 0.15);
-
   /* Bordes */
   --bbl-border:      rgba(255, 255, 255, 0.07);
   --bbl-border-md:   rgba(255, 255, 255, 0.12);
-
   /* Botones */
   --bbl-btn-bg:      rgba(255, 255, 255, 0.05);
   --bbl-btn-hover:   rgba(255, 255, 255, 0.10);
   --bbl-btn-active:  rgba(255, 255, 255, 0.14);
-
-  /* Anillos de pulso del avatar */
+  /* Anillos */
   --bbl-ring-a:      rgba(94, 63, 190, 0.35);
   --bbl-ring-b:      rgba(94, 63, 190, 0.18);
   --bbl-ring-c:      rgba(94, 63, 190, 0.07);
-
-  /* Status dot */
+  /* Status */
   --bbl-status-idle: #404055;
   --bbl-status-live: #4ade80;
   --bbl-status-proc: #fbbf24;
-
   /* Tipografía */
   --bbl-font:      'DM Sans', 'SF Pro Display', system-ui, sans-serif;
   --bbl-font-mono: 'DM Mono', 'Fira Code', monospace;
-
   /* Radios */
   --bbl-radius-sm:   8px;
   --bbl-radius-md:   12px;
   --bbl-radius-lg:   18px;
   --bbl-radius-xl:   24px;
   --bbl-radius-pill: 999px;
-
-  /* Tamaños de icono */
-  --bbl-icon-xs: 14px;
-  --bbl-icon-sm: 18px;
-  --bbl-icon-md: 22px;
 }
 
-/* ── Tema claro ──────────────────────────────────────────────────── */
 [data-theme="light"] {
   --bbl-bg:          #f0f0f5;
   --bbl-surface:     #ffffff;
   --bbl-surface-alt: #f7f7fb;
   --bbl-panel:       #ebebf2;
-
   --bbl-text:        #111118;
   --bbl-text-muted:  #606080;
   --bbl-text-faint:  #aaaacc;
-
   --bbl-border:      rgba(0, 0, 0, 0.07);
   --bbl-border-md:   rgba(0, 0, 0, 0.13);
-
   --bbl-btn-bg:      rgba(0, 0, 0, 0.04);
   --bbl-btn-hover:   rgba(0, 0, 0, 0.08);
   --bbl-btn-active:  rgba(0, 0, 0, 0.12);
-
   --bbl-ring-a:      rgba(94, 63, 190, 0.25);
   --bbl-ring-b:      rgba(94, 63, 190, 0.12);
   --bbl-ring-c:      rgba(94, 63, 190, 0.05);
-
   --bbl-status-idle: #c0c0d0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   RESET
+   RESET BASE
    ═══════════════════════════════════════════════════════════════════ */
-
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body {
   height: 100%;
   font-family: var(--bbl-font);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
   background: var(--bbl-bg);
   color: var(--bbl-text);
 }
-
-button, input, select {
-  font-family: inherit;
-  font-size: inherit;
-}
-
+button, input, select { font-family: inherit; font-size: inherit; }
 button { cursor: pointer; }
+
+/* Scrollbar personalizado */
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: var(--bbl-border);
+  border-radius: 2px;
+}
