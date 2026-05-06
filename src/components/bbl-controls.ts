@@ -166,7 +166,6 @@ export class BblControls extends LitElement {
 
         </div>
 
-        <!-- Text input row -->
       </footer>
     `;
   }
