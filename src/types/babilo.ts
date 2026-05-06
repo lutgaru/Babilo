@@ -7,10 +7,16 @@ export interface Correction {
 
 export interface BabiloAnalysis {
   transcription: string;
+  response: string;
   corrections: Correction[];
   score: number;
   next_step_hint: string | null;
 }
+
+export type TranscriptMessage = {
+  analysis: BabiloAnalysis;
+  timestamp: number;
+};
 
 export type BabiloEvent =
   | { type: 'sentinel_reached' }
@@ -27,11 +33,6 @@ export type StreamEvent =
   | { type: 'sentinel_reached' }
   | {
     type: 'analysis';
-    data: {
-      transcription: string;
-      corrections: Correction[];
-      score: number | null;
-      next_step_hint?: string | null;
-    };
+    data: BabiloAnalysis;
   }
   | { type: 'error'; message: string };

@@ -6,7 +6,7 @@
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
-import type { AIState } from '../types/babilo';
+import type { AIState, TranscriptMessage } from '../types/babilo';
 
 import './bbl-transcript';
 import './bbl-waveform';
@@ -17,7 +17,7 @@ export class BblStage extends LitElement {
   aiState: AIState = 'idle';
 
   @property({ type: Array })
-  messages: Array<{ role: 'user' | 'ai'; content: string; timestamp?: number }> = [];
+  messages: Array<TranscriptMessage> = [];
 
   static styles = css`
     :host {
@@ -54,7 +54,7 @@ export class BblStage extends LitElement {
     };
 
     return html`
-<div class="grid grid-cols-2 gap-6 w-full items-start justify-center">
+<div class="grid grid-cols-2 gap-2 w-full items-start justify-center">
   
   <!-- Columna izquierda: Avatar + Label + Waveform -->
   <div class="flex flex-col items-center gap-4 py-4">
@@ -77,7 +77,7 @@ export class BblStage extends LitElement {
   </div>
 
   <!-- Columna derecha: Transcript (ocupa altura completa) -->
-  <div class="flex flex-col min-h-[200px] max-h-[40vh]">
+  <div class="flex flex-col min-h-[200px] ">
     <bbl-transcript 
       id="chat" 
       .messages=${this.messages}

@@ -8,7 +8,7 @@ import { LitElement, html, css } from 'lit';
 import { state } from 'lit/decorators.js';
 import { startListening, stopAndProcess2 } from '../invoke';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { AIState, Message, StreamEvent } from '../types/babilo';
+import { AIState, TranscriptMessage, StreamEvent, BabiloAnalysis } from '../types/babilo';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-mic-panel';
@@ -26,7 +26,7 @@ export class BblShell extends LitElement {
   @state() corrections: Correction[] = [];
   @state() score: number | null = null;
   @state() nextStepHint: string | null = null;
-  @state() messages: Message[] = [];
+  @state() messages: TranscriptMessage[] = [];
 
   // ── Private Fields (non-reactive) ──
   private _timerInterval: ReturnType<typeof setInterval> | null = null;
@@ -63,8 +63,8 @@ export class BblShell extends LitElement {
   }
 
   // ── Message Management ──
-  private _addMessage(role: 'user' | 'ai', content: string, timestamp?: number) {
-    this.messages = [...this.messages, { role, content, timestamp: timestamp ?? Date.now() }];
+  private _addMessage(analysis: BabiloAnalysis) {
+    this.messages = [...this.messages, { analysis, timestamp: Date.now() }];
   }
 
   // ── Recording Toggle ──
@@ -129,7 +129,7 @@ export class BblShell extends LitElement {
           nextStepHint: this.nextStepHint
         });
 
-        this._addMessage('user', this.transcription);
+        this._addMessage(event.data);
         break;
 
       case 'error':
