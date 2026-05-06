@@ -6,7 +6,7 @@
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
 import { state } from 'lit/decorators.js';
-import { startListening, stopAndProcess2, synthesize, testInference } from '../invoke';
+import { startListening, stopAndProcess2} from '../invoke';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import './bbl-top-bar';
 import './bbl-stage';
@@ -66,33 +66,6 @@ export class BblShell extends LitElement {
   // ── Message Management ──
   private _addMessage(role: 'user' | 'ai', content: string, timestamp?: number) {
     this.messages = [...this.messages, { role, content, timestamp: timestamp ?? Date.now() }];
-  }
-
-  // ── TTS / Audio ──
-  private async speak(text: string) {
-    this.response = 'Synthesizing...';
-    try {
-      const wavBytes = await synthesize(text);
-      const uint8 = new Uint8Array(wavBytes.map((b) => (b < 0 ? b + 256 : b)));
-
-      if (uint8.length < 44) throw new Error(`Datos muy cortos: ${uint8.length} bytes`);
-      if (new TextDecoder().decode(uint8.slice(0, 4)) !== 'RIFF') throw new Error('Header WAV inválido');
-
-      this.response = '▶ Speaking...';
-      const audio = new Audio(URL.createObjectURL(new Blob([uint8], { type: 'audio/wav' })));
-
-      audio.onloadeddata = () => console.log('✅ Audio cargado:', audio.duration, 's');
-      audio.onerror = (e) => { this.response = `❌ Error: ${e.message}`; };
-      audio.onended = () => { 
-        this.response = '✓ Ready';
-        this._addMessage('ai', text);
-      };
-      await audio.play();
-    } catch (err: unknown) {
-      console.error('❌ speak error:', err);
-      const msg = err instanceof Error ? err.message : JSON.stringify(err);
-      this.response = `Error: ${msg}`;
-    }
   }
 
   // ── Recording Toggle ──
@@ -168,25 +141,6 @@ export class BblShell extends LitElement {
     }
   }
 
-  // ── Prompt Handler ──
-  private async handlePrompt(e: CustomEvent<string>) {
-    const text = e.detail;
-    try {
-      this.aiState = 'processing';
-      const res = await testInference(text);
-      this.response = res;
-      this.aiState = 'speaking';
-      
-      this._addMessage('user', text);
-      await this.speak(res);
-    } catch (err: unknown) {
-      console.error('❌ testInference error:', err);
-      const msg = err instanceof Error ? err.message : JSON.stringify(err);
-      this.response = `Error: ${msg}`;
-      this.aiState = 'idle';
-    }
-  }
-
   // ── Render ──
   render() {
     const statusText = this.recording 
@@ -210,8 +164,7 @@ export class BblShell extends LitElement {
 
       <bbl-controls
         ?recording=${this.recording}
-        @mic-toggle=${this.toggleRecording}
-        @prompt-submit=${this.handlePrompt}>
+        @mic-toggle=${this.toggleRecording}>
         <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
       </bbl-controls>
     `;

@@ -45,21 +45,6 @@ export class BblControls extends LitElement {
     this.dispatchEvent(new CustomEvent('mic-toggle', { bubbles: true, composed: true }));
   }
 
-  private _onSubmit(e: Event) {
-    e.preventDefault();
-    const input = this.shadowRoot!.querySelector('#greet-input') as HTMLInputElement;
-    const value = input.value.trim();
-    
-    if (value) {
-      this.dispatchEvent(new CustomEvent('prompt-submit', {
-        detail: value,
-        bubbles: true,
-        composed: true,
-      }));
-      input.value = '';
-    }
-  }
-
   // ── Render ──
   render() {
     return html`
@@ -182,40 +167,6 @@ export class BblControls extends LitElement {
         </div>
 
         <!-- Text input row -->
-        <form class="flex gap-2 items-center" @submit=${this._onSubmit}>
-          <input
-            id="greet-input"
-            type="text"
-            placeholder="Write a prompt to test the AI response..."
-            autocomplete="off"
-            class="
-              flex-1
-              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
-              rounded-[var(--bbl-radius-pill)]
-              px-[18px] py-[9px]
-              text-[14px] text-[var(--bbl-text)]
-              outline-none
-              transition-[border-color] duration-200
-            "
-          />
-          <button
-            type="submit"
-            title="Enviar"
-            class="
-              w-[38px] h-[38px] rounded-full flex-shrink-0
-              bg-[var(--bbl-accent2)] border-none
-              flex items-center justify-center
-              text-white
-              transition-[background,transform] duration-150
-              hover:bg-[#7352d4]
-              active:scale-[0.94]
-            ">
-            <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M2 8l12-6-6 12-.5-5.5L2 8z"/>
-            </svg>
-          </button>
-        </form>
-
       </footer>
     `;
   }
