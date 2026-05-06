@@ -4,20 +4,17 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { state } from 'lit/decorators.js';
 import { listAudioDevices } from '../invoke';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
-export class BblMicPanel extends LitElement {
-  static properties = {
-    devices:  { state: true },
-    selected: { state: true },
-  };
+// ── Types ──
+type AudioDevice = { name: string; id?: string }; // Adjust based on your actual backend response
 
-  constructor() {
-    super();
-    this.devices  = [];
-    this.selected = '';
-  }
+export class BblMicPanel extends LitElement {
+  // ── Reactive State Properties ──
+  @state() private devices: AudioDevice[] = [];
+  @state() private selected = '';
 
   static styles = css`
     :host { display: block; }
@@ -38,6 +35,12 @@ export class BblMicPanel extends LitElement {
     this.load();
   }
 
+  // ── Public Getter for selected device ──
+  get selectedDevice(): string | null {
+    return this.selected || null;
+  }
+
+  // ── Device Loading ──
   private async load() {
     try {
       this.devices = await listAudioDevices();
@@ -46,8 +49,13 @@ export class BblMicPanel extends LitElement {
     }
   }
 
-  get selectedDevice() { return this.selected || null; }
+  // ── Event Handlers ──
+  private _onDeviceChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    this.selected = target.value;
+  }
 
+  // ── Render ──
   render() {
     return html`
       <div class="flex items-center gap-2">
@@ -79,9 +87,10 @@ export class BblMicPanel extends LitElement {
               font-[inherit] cursor-pointer outline-none
               transition-[border-color] duration-200
             "
-            @change=${(e: Event) => { this.selected = (e.target as HTMLSelectElement).value; }}>
+            .value=${this.selected}
+            @change=${this._onDeviceChange}>
             <option value="">Default</option>
-            ${this.devices.map((d: any) => html`
+            ${this.devices.map((d) => html`
               <option value=${d.name}>${d.name}</option>
             `)}
           </select>

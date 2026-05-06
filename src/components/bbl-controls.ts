@@ -4,17 +4,13 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { property } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
 export class BblControls extends LitElement {
-  static properties = {
-    recording: { type: Boolean },
-  };
-
-  constructor() {
-    super();
-    this.recording = false;
-  }
+  // ── Reactive Property (passed from parent) ──
+  @property({ type: Boolean })
+  recording = false;
 
   static styles = css`
     :host {
@@ -44,21 +40,27 @@ export class BblControls extends LitElement {
     }
   }
 
+  // ── Event Handlers ──
   private _onMicClick() {
     this.dispatchEvent(new CustomEvent('mic-toggle', { bubbles: true, composed: true }));
   }
 
   private _onSubmit(e: Event) {
     e.preventDefault();
-    const input = this.shadowRoot!.querySelector('input') as HTMLInputElement;
-    this.dispatchEvent(new CustomEvent('prompt-submit', {
-      detail: input.value,
-      bubbles: true,
-      composed: true,
-    }));
-    input.value = '';
+    const input = this.shadowRoot!.querySelector('#greet-input') as HTMLInputElement;
+    const value = input.value.trim();
+    
+    if (value) {
+      this.dispatchEvent(new CustomEvent('prompt-submit', {
+        detail: value,
+        bubbles: true,
+        composed: true,
+      }));
+      input.value = '';
+    }
   }
 
+  // ── Render ──
   render() {
     return html`
       <footer class="

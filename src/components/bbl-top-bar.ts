@@ -4,33 +4,32 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { property, customElement } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
+@customElement('bbl-top-bar')
 export class BblTopBar extends LitElement {
-  static properties = {
-    status:  {},
-    seconds: {},
-    active:  { type: Boolean },
-  };
+  
+  @property({ type: String })
+  status = 'Ready';
 
-  constructor() {
-    super();
-    this.status  = 'Ready';
-    this.seconds = 0;
-    this.active  = false;
-  }
+  @property({ type: Number })
+  seconds = 0;
+
+  @property({ type: Boolean })
+  active = false;
   
   connectedCallback() {
-  super.connectedCallback();
-  if (this.shadowRoot) {
-    applyTailwindToShadowRoot(this.shadowRoot);
+    super.connectedCallback();
+    if (this.shadowRoot) {
+      applyTailwindToShadowRoot(this.shadowRoot);
+    }
   }
-}
 
-static styles = css`
-  :host { display: block; }
-  /* Solo CSS personalizado que NO puede ser utility */
-`;
+  static styles = css`
+    :host { display: block; }
+    /* Solo CSS personalizado que NO puede ser utility */
+  `;
 
   private get timeLabel() {
     const m = String(Math.floor(this.seconds / 60)).padStart(2, '0');
@@ -59,5 +58,3 @@ static styles = css`
     `;
   }
 }
-
-customElements.define('bbl-top-bar', BblTopBar);

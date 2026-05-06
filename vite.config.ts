@@ -4,12 +4,13 @@ export default defineConfig({
   root: 'src',           // tu carpeta de frontend
   clearScreen: false,    // para ver logs de Tauri en la misma terminal
   server: {
-    port: 1420,          // puerto que Tauri espera por defecto
+    port: 1420,
     strictPort: true,
   },
   build: {
     target: 'esnext',
-    outDir: '../dist',   // Tauri leerá de aquí
+    outDir: '../dist',
     emptyOutDir: true,
   },
+  // Tailwind funciona automáticamente con PostCSS
 })

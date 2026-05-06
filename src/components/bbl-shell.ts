@@ -5,85 +5,75 @@
 
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
+import { state } from 'lit/decorators.js';
 import { startListening, stopAndProcess2, synthesize, testInference } from '../invoke';
-import { listen } from '@tauri-apps/api/event';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-mic-panel';
 import './bbl-controls';
 
+type AIState = 'idle' | 'listening' | 'thinking' | 'processing' | 'speaking';
+type Message = { role: 'user' | 'ai'; content: string; timestamp?: number };
+type Correction = unknown; // Adjust based on your actual correction structure
+
 export class BblShell extends LitElement {
-  static properties = {
-    aiState: { state: true },
-    recording: { state: true },
-    response: { state: true },
-    timerSecs: { state: true },
-    transcription: { state: true },
-    corrections: { state: true },
-    score: { state: true },
-    nextStepHint: { state: true },
-    messages: { state: true },
-  };
+  // ── Reactive State Properties ──
+  @state() aiState: AIState = 'idle';
+  @state() recording = false;
+  @state() response = '';
+  @state() timerSecs = 0;
+  @state() transcription = '';
+  @state() corrections: Correction[] = [];
+  @state() score: number | null = null;
+  @state() nextStepHint: string | null = null;
+  @state() messages: Message[] = [];
 
-connectedCallback() {
-  super.connectedCallback();
-  if (this.shadowRoot) {
-    applyTailwindToShadowRoot(this.shadowRoot);
-  }
-}
+  // ── Private Fields (non-reactive) ──
+  private _timerInterval: ReturnType<typeof setInterval> | null = null;
+  private _unlistenStream: UnlistenFn | null = null;
 
-static styles = css`
-  :host { display: block; }
-  /* Solo CSS personalizado que NO puede ser utility */
-`;
+  static styles = css`
+    :host { display: block; }
+    /* Solo CSS personalizado que NO puede ser utility */
+  `;
 
-  constructor() {
-    super();
-    this.aiState = 'idle';
-    this.recording = false;
-    this.response = '';
-    this.timerSecs = 0;
-    this.transcription = '';
-    this.corrections = [];
-    this.score = null;
-    this.nextStepHint = null;
-    /** @type {Array<{ role: 'user' | 'ai'; content: string; timestamp?: number }>} */
-    this.messages = [];
-    /** @type {ReturnType<typeof setInterval> | null} */
-    this._timerInterval = null;
-    /** @type {Function | null} */
-    this.unlistenStream = null;
+  connectedCallback() {
+    super.connectedCallback();
+    if (this.shadowRoot) {
+      applyTailwindToShadowRoot(this.shadowRoot);
+    }
   }
 
-  /** @type {ReturnType<typeof setInterval> | null} */
-  _timerInterval;
-  /** @type {Function | null} */
-  unlistenStream;
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this._unlistenStream) this._unlistenStream();
+    this.stopTimer();
+  }
 
-  startTimer() {
+  // ── Timer Helpers ──
+  private startTimer() {
     this.timerSecs = 0;
     this._timerInterval = setInterval(() => { this.timerSecs++; }, 1000);
   }
 
-  stopTimer() {
+  private stopTimer() {
     if (this._timerInterval) clearInterval(this._timerInterval);
     this._timerInterval = null;
     this.timerSecs = 0;
   }
 
-  /**
-   * Add message to shared state (triggers re-render down the tree)
-   * @private
-   */
-  _addMessage(role, content, timestamp) {
+  // ── Message Management ──
+  private _addMessage(role: 'user' | 'ai', content: string, timestamp?: number) {
     this.messages = [...this.messages, { role, content, timestamp: timestamp ?? Date.now() }];
   }
 
-  async speak(text) {
+  // ── TTS / Audio ──
+  private async speak(text: string) {
     this.response = 'Synthesizing...';
     try {
       const wavBytes = await synthesize(text);
-      const uint8 = new Uint8Array(wavBytes.map((b) => b < 0 ? b + 256 : b));
+      const uint8 = new Uint8Array(wavBytes.map((b) => (b < 0 ? b + 256 : b)));
 
       if (uint8.length < 44) throw new Error(`Datos muy cortos: ${uint8.length} bytes`);
       if (new TextDecoder().decode(uint8.slice(0, 4)) !== 'RIFF') throw new Error('Header WAV inválido');
@@ -95,18 +85,19 @@ static styles = css`
       audio.onerror = (e) => { this.response = `❌ Error: ${e.message}`; };
       audio.onended = () => { 
         this.response = '✓ Ready';
-        // Add AI response to chat when TTS finishes
         this._addMessage('ai', text);
       };
       await audio.play();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('❌ speak error:', err);
-      this.response = `Error: ${err.message ?? JSON.stringify(err)}`;
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      this.response = `Error: ${msg}`;
     }
   }
 
+  // ── Recording Toggle ──
   async toggleRecording() {
-    const micPanel = this.shadowRoot?.querySelector('bbl-mic-panel');
+    const micPanel = this.shadowRoot?.querySelector('bbl-mic-panel') as HTMLElement & { selectedDevice?: string | null };
     const selectedDevice = micPanel?.selectedDevice ?? null;
 
     if (!this.recording) {
@@ -115,36 +106,39 @@ static styles = css`
         this.recording = true;
         this.aiState = 'listening';
         this.startTimer();
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error al iniciar micro:', err);
         this.aiState = 'idle';
-        alert(`Error: ${err}`);
+        const msg = err instanceof Error ? err.message : String(err);
+        alert(`Error: ${msg}`);
       }
     } else {
-      const input = this.shadowRoot?.querySelector('#greet-input');
+      const input = this.shadowRoot?.querySelector('#greet-input') as HTMLInputElement | null;
       const prompt = input?.value ?? '';
       this.aiState = 'thinking';
 
-      this.unlistenStream = await listen('babilo://stream', ({ payload }) => {
-        this.handleStreamEvent(payload);
+      this._unlistenStream = await listen('babilo://stream', ({ payload }) => {
+        this.handleStreamEvent(payload as StreamEvent);
       });
 
       try {
         await stopAndProcess2(prompt);
-      } catch (err) {
+      } catch (err: unknown) {
         console.error('Error procesando audio:', err);
         this.aiState = 'idle';
-        alert(`Error: ${err}`);
+        const msg = err instanceof Error ? err.message : String(err);
+        alert(`Error: ${msg}`);
       } finally {
         this.recording = false;
-        if (this.unlistenStream) this.unlistenStream();
-        this.unlistenStream = null;
+        if (this._unlistenStream) this._unlistenStream();
+        this._unlistenStream = null;
         this.stopTimer();
       }
     }
   }
 
-  handleStreamEvent(event) {
+  // ── Stream Event Handler ──
+  private handleStreamEvent(event: StreamEvent) {
     switch (event.type) {
       case 'sentinel_reached':
         this.aiState = 'speaking';
@@ -163,7 +157,6 @@ static styles = css`
           nextStepHint: this.nextStepHint
         });
 
-        // ✅ Add user message to shared state
         this._addMessage('user', this.transcription);
         break;
 
@@ -175,7 +168,8 @@ static styles = css`
     }
   }
 
-  async handlePrompt(e) {
+  // ── Prompt Handler ──
+  private async handlePrompt(e: CustomEvent<string>) {
     const text = e.detail;
     try {
       this.aiState = 'processing';
@@ -183,22 +177,17 @@ static styles = css`
       this.response = res;
       this.aiState = 'speaking';
       
-      // Add user prompt to chat
       this._addMessage('user', text);
       await this.speak(res);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('❌ testInference error:', err);
-      this.response = `Error: ${err.message ?? JSON.stringify(err)}`;
+      const msg = err instanceof Error ? err.message : JSON.stringify(err);
+      this.response = `Error: ${msg}`;
       this.aiState = 'idle';
     }
   }
 
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    if (this.unlistenStream) this.unlistenStream();
-    this.stopTimer();
-  }
-
+  // ── Render ──
   render() {
     const statusText = this.recording 
       ? 'Recording' 
@@ -228,5 +217,19 @@ static styles = css`
     `;
   }
 }
+
+// ── Stream Event Type (adjust to match your backend) ──
+type StreamEvent =
+  | { type: 'sentinel_reached' }
+  | {
+      type: 'analysis';
+      data: {
+        transcription: string;
+        corrections: Correction[];
+        score: number | null;
+        next_step_hint?: string | null;
+      };
+    }
+  | { type: 'error'; message: string };
 
 customElements.define('bbl-shell', BblShell);

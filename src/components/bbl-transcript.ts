@@ -4,13 +4,20 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { property, query } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
 export class BblTranscript extends LitElement {
-  static properties = {
-    messages:    { type: Array },
-    maxMessages: { type: Number },
-  };
+  // ── Reactive Properties ──
+  @property({ type: Array })
+  messages: Array<{ role: 'user' | 'ai'; content: string; timestamp?: number }> = [];
+
+  @property({ type: Number })
+  maxMessages = 50;
+
+  // ── DOM Element Query ──
+  @query('.container')
+  private _scrollContainer?: HTMLDivElement;
 
   static styles = css`
     :host {
@@ -42,14 +49,10 @@ export class BblTranscript extends LitElement {
     }
   }
 
-  constructor() {
-    super();
-    this.messages    = [];
-    this.maxMessages = 50;
-    this._scrollContainer = null;
-  }
-
-  _scrollContainer: HTMLDivElement | null;
+  // Constructor removed: defaults are now handled by field initializers above
+  // this.messages    = [];
+  // this.maxMessages = 50;
+  // this._scrollContainer = null;
 
   addMessage({ role, content, timestamp = Date.now() }: {
     role: 'user' | 'ai';
@@ -78,7 +81,7 @@ export class BblTranscript extends LitElement {
   }
 
   firstUpdated() {
-    this._scrollContainer = this.shadowRoot?.querySelector('.container') ?? null;
+    // @query automatically populates `_scrollContainer` after the first render
     this._scrollToBottom();
   }
 
@@ -104,7 +107,7 @@ export class BblTranscript extends LitElement {
                   flex flex-col gap-3
                   max-h-[200px] overflow-y-auto
                   p-1 scroll-smooth">
-        ${this.messages.map((msg: any) => html`
+        ${this.messages.map((msg) => html`
           <div class="message
                       flex flex-col
                       ${msg.role === 'ai' ? 'items-start' : 'items-end'}">

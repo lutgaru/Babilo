@@ -4,25 +4,19 @@
  */
 
 import { LitElement, html, css } from 'lit';
+import { property } from 'lit/decorators.js';
 import './bbl-transcript';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
-import './bbl-transcript';
+type AIState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export class BblStage extends LitElement {
-  static properties = {
-    aiState: { type: String },
-    messages: { type: Array },
-  };
+  // ── Reactive Properties ──
+  @property({ type: String })
+  aiState: AIState = 'idle';
 
-
-  connectedCallback() {
-    super.connectedCallback();
-    // ✅ Inyectar Tailwind en este shadow root
-    if (this.shadowRoot) {
-      applyTailwindToShadowRoot(this.shadowRoot);
-    }
-  }
+  @property({ type: Array })
+  messages: Array<{ role: 'user' | 'ai'; content: string; timestamp?: number }> = [];
 
   static styles = css`
     :host {
@@ -101,22 +95,17 @@ export class BblStage extends LitElement {
     }
   }
 
-  constructor() {
-    super();
-    this.aiState = 'idle';
-    this.messages = [];
-  }
-
-  get pulsing() {
+  // ── Getters for state-derived classes ──
+  get pulsing(): boolean {
     return this.aiState === 'listening' || this.aiState === 'speaking';
   }
 
-  get live() {
+  get live(): boolean {
     return this.aiState === 'listening';
   }
 
   render() {
-    const STATE_LABELS: Record<string, string> = {
+    const STATE_LABELS: Record<AIState, string> = {
       idle: 'Waiting...',
       listening: 'Listening...',
       processing: 'Processing...',
@@ -167,7 +156,7 @@ export class BblStage extends LitElement {
           Assistant
         </span>
         <span class="text-[15px] font-medium text-[var(--bbl-text)] min-h-[22px]">
-          ${STATE_LABELS[this.aiState] ?? ''}
+          ${STATE_LABELS[this.aiState]}
         </span>
       </div>
 
