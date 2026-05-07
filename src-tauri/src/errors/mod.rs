@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
- 
 //! Manejo de errores unificado con tipos específicos
 
 use thiserror::Error;
@@ -17,25 +16,25 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Audio: {0}")]
     Audio(#[from] AudioError),
-    
+
     #[error("LLM: {0}")]
     Llm(#[from] LlmError),
-    
+
     #[error("TTS: {0}")]
     Tts(#[from] TtsError),
-    
+
     #[error("Configuración: {0}")]
     Config(String),
-    
+
     #[error("Estado: {0}")]
     State(String),
-    
+
     #[error("IO: {0}")]
     Io(#[from] std::io::Error),
-    
+
     #[error("JSON: {0}")]
     Json(#[from] serde_json::Error),
-    
+
     #[error("Tauri: {0}")]
     Tauri(String),
 }
@@ -72,32 +71,32 @@ impl From<cpal::PauseStreamError> for AppError {
 pub enum AudioError {
     #[error("Dispositivo no encontrado: {0}")]
     DeviceNotFound(String),
-    
+
     #[error("Configuración de dispositivo: {0}")]
     DeviceConfig(#[source] cpal::DevicesError),
-    
+
     #[error("Construcción de stream: {0}")]
     StreamBuild(#[source] cpal::BuildStreamError),
-    
+
     #[error("Reproducción de stream: {0}")]
     StreamPlay(#[source] cpal::PlayStreamError),
-    
+
     #[error("Pausa de stream: {0}")]
     StreamPause(#[source] cpal::PauseStreamError),
-    
+
     #[error("Formato de muestra no soportado")]
     UnsupportedSampleFormat,
-    
+
     #[error("Buffer de audio vacío")]
     EmptyBuffer,
-    
+
     #[error("Error de procesamiento: {0}")]
     Processing(String),
 
-     #[error("Configuración de stream: {0}")]
-    StreamConfig(#[source] cpal::DefaultStreamConfigError),  // ← nueva
+    #[error("Configuración de stream: {0}")]
+    StreamConfig(#[source] cpal::DefaultStreamConfigError), // ← nueva
 
-        #[error("Captura ya activa")]
+    #[error("Captura ya activa")]
     CaptureAlreadyActive,
 }
 
@@ -105,54 +104,57 @@ pub enum AudioError {
 pub enum LlmError {
     #[error("Inicialización del backend: {0}")]
     BackendInit(String),
-    
+
     #[error("Carga del modelo: {0}")]
     ModelLoad(String),
-    
+
     #[error("Inicialización del contexto: {0}")]
     ContextInit(String),
-    
+
     #[error("Inicialización MTMD: {0}")]
     MtmdInit(String),
-    
+
     #[error("Tokenización: {0}")]
     Tokenization(String),
-    
+
     #[error("Decodificación: {0}")]
     Decode(String),
-    
+
     #[error("Muestreo: {0}")]
     Sampling(String),
-    
+
     #[error("Contexto lleno y sin capacidad de reset")]
     ContextFull,
-    
+
     #[error("Modelo no inicializado")]
     NotInitialized,
+
+    #[error("Analysis missing field {0}")]
+    MissingField(String),
 }
 
 #[derive(Error, Debug)]
 pub enum TtsError {
     #[error("Carga de sesión ONNX: {0}")]
     SessionLoad(String),
-    
+
     #[error("Ejecución de inferencia: {0}")]
     Inference(String),
-    
+
     #[error("Carga de voz: {0}")]
     VoiceLoad(String),
-    
+
     #[error("Texto vacío")]
     EmptyText,
-    
+
     #[error("Generación de audio: {0}")]
     AudioGeneration(String),
-    
+
     #[error("Configuración TTS no disponible")]
     ConfigMissing,
 
-     #[error("Tensor ORT: {0}")]
-    Tensor(String),           // ← nuevo, para Tensor::from_array
+    #[error("Tensor ORT: {0}")]
+    Tensor(String), // ← nuevo, para Tensor::from_array
 }
 
 // ─────────────────────────────────────────────────────────────

@@ -1,7 +1,17 @@
-// src-tauri/src/models/mod.rs
-use serde::{Deserialize, Serialize};
+/*
+ * Babilo - Copyright (C) 2026 Lutgaru
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ */
 
-use crate::errors::{AppError, LlmError};
+pub mod analysis;
+pub use analysis::BabiloAnalysis;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Correction {
@@ -11,32 +21,8 @@ pub struct Correction {
 }
 
 pub struct BabiloStreamResult {
-    pub response: String,        // available first → TTS
+    pub response: String,         // available first → TTS
     pub analysis: BabiloAnalysis, // available second → UI
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct BabiloAnalysis {
-    pub transcription: String,
-    pub corrections: Vec<Correction>,
-    pub score: u8,
-    pub next_step_hint: Option<String>,
-}
-
-impl BabiloAnalysis {
-    pub fn from_inference(raw: &str) -> Result<Self, AppError> {
-        let cleaned = raw
-            .trim()
-            .trim_start_matches("```json")
-            .trim_start_matches("```")
-            .trim_end_matches("```")
-            .trim();
-
-        serde_json::from_str(cleaned)
-            .map_err(|e| AppError::from(LlmError::Tokenization(
-                format!("Invalid BabiloAnalysis JSON: {e}\nRaw: {raw}")
-            )))
-    }
 }
 
 pub enum TokenEvent {
@@ -52,16 +38,16 @@ pub enum TokenEvent {
 
 pub const SENTINEL: &str = "<|babilo_analysis|>";
 /// Base system instruction for Babilo behavior.
-/// 
+///
 /// This serves as the foundational prompt that all role-specific
 /// instructions will extend or override. Example composition:
-/// 
+///
 /// ```
 /// let role_prompt = get_role_prompt("grammar_coach");
 /// let final_prompt = format!("{}\n\n{}", master_system_instruction(), role_prompt);
 /// ```
 pub fn master_system_instruction() -> &'static str {
-        r#"You are a language learning assistant. The user will speak in their target language.
+    r#"You are a language learning assistant. The user will speak in their target language.
 
 First, reply conversationally in 1-2 sentences naturally.
 Then output exactly: <|babilo_analysis|>

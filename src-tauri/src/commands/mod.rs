@@ -226,34 +226,48 @@ pub async fn stop_and_process_streaming(
                     let _ = model.reset();
                 }
 
-                let mut tts_sentence_buf = String::new();
                 let mut analysis_buf = String::new();
+                let mut response_buf = String::new();
 
                 let mut tts_tx_opt = Some(tts_tx); // wrap in Option so we can take() it
 
                 let infer_result =
                     model.infer_audio_streaming(&resampled, &prompt, |event| match event {
                         TokenEvent::ResponseToken(text) => {
-                            tts_sentence_buf.push_str(&text);
+                            response_buf.push_str(&text); // Accumulate spoken response
                         }
+
                         TokenEvent::SentinelReached => {
-                            let full_response = tts_sentence_buf.trim().to_string();
-                            if !full_response.is_empty() {
+                            // Optional: send partial response to TTS immediately
+                            let partial = response_buf.trim().to_string();
+                            if !partial.is_empty() {
                                 if let Some(tx) = &tts_tx_opt {
-                                    let _ = tx.send(full_response);
+                                    let _ = tx.send(partial);
                                 }
-                                tts_sentence_buf.clear();
                             }
                             emit(BabiloEvent::SentinelReached);
                         }
                         TokenEvent::AnalysisToken(text) => {
-                            analysis_buf.push_str(&text);
+                            analysis_buf.push_str(&text); // Accumulate JSON analysis
                         }
                         TokenEvent::Done => {
-                            // ← Drop tx HERE so TTS thread exits after last speak()
                             drop(tts_tx_opt.take());
 
-                            match BabiloAnalysis::from_inference(&analysis_buf) {
+                            // Finalize response (trim, validate)
+                            let final_response = response_buf.trim().to_string();
+                            if final_response.is_empty() {
+                                emit(BabiloEvent::Error {
+                                    message: "Empty response from model".into(),
+                                });
+                                return;
+                            }
+
+                            // Build the complete analysis
+                            match BabiloAnalysis::builder()
+                                .with_response(final_response)
+                                .with_json_payload(&analysis_buf)
+                                .and_then(|b| b.build())
+                            {
                                 Ok(data) => emit(BabiloEvent::Analysis { data }),
                                 Err(e) => emit(BabiloEvent::Error {
                                     message: e.to_string(),
