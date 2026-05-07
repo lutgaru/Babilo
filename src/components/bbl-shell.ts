@@ -102,6 +102,7 @@ export class BblShell extends LitElement {
         alert(`Error: ${msg}`);
       } finally {
         this.recording = false;
+        this.aiState = 'idle';
         if (this._unlistenStream) this._unlistenStream();
         this._unlistenStream = null;
         this.stopTimer();
