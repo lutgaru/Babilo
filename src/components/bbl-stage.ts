@@ -54,38 +54,28 @@ export class BblStage extends LitElement {
     };
 
     return html`
-<div class="grid grid-cols-2 gap-2 w-full items-start justify-center">
-  
-  <!-- Columna izquierda: Avatar + Label + Waveform -->
-  <div class="flex flex-col items-center gap-4 py-4">
-    
-    <!-- Avatar (extracted component) -->
-    <bbl-avatar .state=${this.aiState}></bbl-avatar>
+    <div class="grid grid-cols-2 gap-6 w-full h-full items-start justify-center">
+      
+      <div class="flex flex-col items-center gap-4 py-4 flex-shrink-0">
+        <bbl-avatar .state=${this.aiState}></bbl-avatar>
+        <div class="flex flex-col items-center gap-0.5">
+          <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">Assistant</span>
+          <span class="text-[15px] font-medium text-[var(--bbl-text)] min-h-[22px] text-center">
+            ${STATE_LABELS[this.aiState]}
+          </span>
+        </div>
+        <bbl-waveform .state=${this.aiState}></bbl-waveform>
+      </div>
 
-    <!-- AI label + state (centrado horizontalmente) -->
-    <div class="flex flex-col items-center gap-0.5">
-      <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">
-        Assistant
-      </span>
-      <span class="text-[15px] font-medium text-[var(--bbl-text)] min-h-[22px] text-center">
-        ${STATE_LABELS[this.aiState]}
-      </span>
+      <div class="flex flex-col min-h-0 h-full">
+        <bbl-transcript 
+          id="chat" 
+          .messages=${this.messages}
+          class="w-full h-full">
+        </bbl-transcript>
+      </div>
+      
     </div>
-
-    <!-- Waveform (extracted component) -->
-    <bbl-waveform .state=${this.aiState}></bbl-waveform>
-  </div>
-
-  <!-- Columna derecha: Transcript (ocupa altura completa) -->
-  <div class="flex flex-col min-h-[200px] ">
-    <bbl-transcript 
-      id="chat" 
-      .messages=${this.messages}
-      class="w-full h-full">
-    </bbl-transcript>
-  </div>
-
-</div>
     `;
   }
 }

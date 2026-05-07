@@ -18,27 +18,26 @@ export class BblTranscript extends LitElement {
   @query('.container')
   private _scrollContainer?: HTMLDivElement;
 
-  static styles = css`
-    :host {
-      display: block;
-      width: 100%;
-      max-width: 440px;
-    }
+ static styles = css`
+  :host {
+    display: block;
+    width: 100%;
+  }
 
-    /* ── Only what Tailwind CAN'T do in shadow DOM ── */
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0);   }
-    }
-    .message { animation: fadeIn 0.2s ease-out; }
+  /* ── Only what Tailwind CAN'T do in shadow DOM ── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0);   }
+  }
+  .message { animation: fadeIn 0.2s ease-out; }
 
-    .container::-webkit-scrollbar       { width: 4px; }
-    .container::-webkit-scrollbar-track { background: transparent; }
-    .container::-webkit-scrollbar-thumb {
-      background: var(--bbl-border);
-      border-radius: 2px;
-    }
-  `;
+  .container::-webkit-scrollbar       { width: 4px; }
+  .container::-webkit-scrollbar-track { background: transparent; }
+  .container::-webkit-scrollbar-thumb {
+    background: var(--bbl-border);
+    border-radius: 2px;
+  }
+`;
 
   connectedCallback() {
     super.connectedCallback();
@@ -138,10 +137,12 @@ export class BblTranscript extends LitElement {
     }
 
     return html`
-      <div class="container
-                  flex flex-col gap-4
-                  max-h-[200px] overflow-y-auto
-                  p-1 scroll-smooth">
+         <div class="container
+                flex flex-col gap-4
+                h-full min-h-0
+                overflow-y-auto
+                p-1 scroll-smooth
+                pr-2"> 
         ${this.messages.map((msg) => html`
           <div class="message flex flex-col gap-2">
             
@@ -161,7 +162,6 @@ export class BblTranscript extends LitElement {
               </span>
             </div>
 
-            <!-- 📊 Analysis card (left) - TODO con Tailwind -->
             <div class="
               flex flex-col gap-2
               bg-[var(--bbl-surface-alt)] border-[0.5px] border-[var(--bbl-border)]

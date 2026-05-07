@@ -149,24 +149,25 @@ export class BblShell extends LitElement {
         : this.aiState;
 
     return html`
-      <div class="flex flex-col min-h-screen bg-[var(--bbl-bg)]">
+    <div class="flex flex-col min-h-screen bg-[var(--bbl-bg)] h-screen">
       <bbl-top-bar
         .status=${statusText}
         .seconds=${this.timerSecs}
         ?active=${this.recording}>
       </bbl-top-bar>
-
-      <main class="flex-1 flex flex-col">
+      <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
         <bbl-stage 
           .aiState=${this.aiState} 
           .response=${this.response}
-          .messages=${this.messages}>
+          .messages=${this.messages}
+          class="h-full">
         </bbl-stage>
       </main>
 
       <bbl-controls 
         ?recording=${this.recording}
-        @mic-toggle=${this.toggleRecording}>
+        @mic-toggle=${this.toggleRecording}
+        class="flex-shrink-0">
         <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
       </bbl-controls>
     </div>
