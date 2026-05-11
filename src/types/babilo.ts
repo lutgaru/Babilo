@@ -18,6 +18,34 @@ export type TranscriptMessage = {
   timestamp: number;
 };
 
+export interface SessionCaps {
+  accepts_audio: boolean;
+  accepts_text: boolean;
+  llm_initiates: boolean;
+}
+
+export type SessionInfo = {
+  session_id: string;
+  mode_id: string;
+  mode_name: string;
+  caps: SessionCaps;
+  opening_line: string | null;
+};
+
+export type SessionSummary = {
+  session_id: string;
+  mode_name: string;
+  turns: number;
+  average_score: number;
+};
+
+export type ModeFileInfo = {
+  path: string;           // Filesystem path to the .babilo.json config
+  name: string;           // Human-readable mode name
+  description?: string;   // Optional description shown in UI
+  caps: SessionCaps;         // Capability flags for feature toggles
+};
+
 export type BabiloEvent =
   | { type: 'sentinel_reached' }
   | { type: 'analysis'; data: BabiloAnalysis }
@@ -36,3 +64,5 @@ export type StreamEvent =
     data: BabiloAnalysis;
   }
   | { type: 'error'; message: string };
+
+export type AppView = 'config-list' | 'session';

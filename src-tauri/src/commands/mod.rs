@@ -16,7 +16,7 @@ use crate::{
     audio::capture::AudioCapture,
     audio::list_input_devices,
     errors::AppError,
-    modes::load_mode,
+    modes::{load_mode, ModeFileInfo},
     schemas::{BabiloAnalysis, BabiloEvent, TokenEvent},
     session::{
         build_session_info, build_session_summary, compose_system_prompt, SessionInfo,
@@ -426,4 +426,9 @@ async fn load_mode_from_path(path: String, state: State<'_, AppState>) -> Result
     let mode = load_mode(&path).map_err(|e| e.to_string())?;
     *state.active_mode.lock().unwrap() = Some(Arc::new(mode));
     Ok(())
+}
+
+#[tauri::command]
+pub async fn get_list_modes() -> Result<Vec<ModeFileInfo>, String> {
+    crate::modes::list_modes().map_err(|e| e.to_string())
 }

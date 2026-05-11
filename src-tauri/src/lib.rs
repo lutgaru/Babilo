@@ -45,6 +45,9 @@ pub fn run() {
             commands::test_inference,
             commands::reset_conversation,
             commands::get_context_usage,
+            commands::start_session,
+            commands::end_session,
+            commands::get_list_modes,
         ])
         .setup(|app| {
             // Inicializar logging

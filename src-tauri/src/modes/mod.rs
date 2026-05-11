@@ -1,10 +1,15 @@
-use serde::Deserialize;
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 use std::fs;
 
 // ─── JSON schema ─────────────────────────────────────────────────────────────
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModeFileInfo {
+    pub path: String,
+    pub name: String,
+    pub caps: ModeCaps,
+}
+#[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct ModeCaps {
     #[serde(default)]
     pub llm_initiates: bool,
@@ -54,6 +59,13 @@ impl ModeConfig for BabiloMode {
 
 // ─── Loader ──────────────────────────────────────────────────────────────────
 
+pub fn modes_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Project root not found")
+        .join("modes")
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ModeLoadError {
     #[error("No se pudo leer el archivo: {0}")]
@@ -78,4 +90,25 @@ pub fn load_mode(path: impl AsRef<Path>) -> Result<BabiloMode, ModeLoadError> {
         })?;
 
     Ok(BabiloMode { file })
+}
+
+pub fn list_modes() -> Result<Vec<ModeFileInfo>, ModeLoadError> {
+    let mut modes = Vec::new();
+    for entry in fs::read_dir(modes_dir())? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("json") {
+            let mode = load_mode(&path)?;
+            modes.push(ModeFileInfo {
+                path: path.display().to_string(),
+                name: mode.name().to_string(),
+                caps: ModeCaps {
+                    llm_initiates: mode.llm_initiates(),
+                    accepts_audio: mode.accepts_audio(),
+                    accepts_text: mode.accepts_text(),
+                }
+            });
+        }
+    }
+    Ok(modes)
 }
