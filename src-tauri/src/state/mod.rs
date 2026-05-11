@@ -17,6 +17,7 @@ use crate::{
     audio::{AudioCapture, MelPreprocessor},
     config::AppConfig,
     llama::InferenceEngine,
+    modes::ModeConfig,
     tts::TtsEngine,
 };
 
@@ -101,6 +102,12 @@ pub struct AppState {
 
     /// Preprocesador de features (Mel/FFT)
     pub preprocessor: MelPreprocessor,
+
+    /// Active mode of the current session (None = no active session)
+    pub active_mode: Mutex<Option<Arc<dyn ModeConfig>>>,
+
+    /// Unique identifier for the active session (None = no session)
+    pub session_id: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -122,6 +129,8 @@ impl AppState {
             audio_buffer: Arc::new(Mutex::new(Vec::with_capacity(16000 * 30))),
             sample_rate: Mutex::new(16000),
             preprocessor,
+            active_mode: Mutex::new(None),
+            session_id: Mutex::new(None),
         }
     }
 
@@ -143,6 +152,26 @@ impl AppState {
         if let Ok(mut buf) = self.audio_buffer.lock() {
             buf.clear();
         }
+    }
+
+    pub fn start_session(&self, mode: Arc<dyn ModeConfig>) -> String {
+        let id = uuid::Uuid::new_v4().to_string();
+        *self.active_mode.lock().unwrap() = Some(mode);
+        *self.session_id.lock().unwrap() = Some(id.clone());
+        id
+    }
+
+    pub fn end_session(&self) -> Option<String> {
+        *self.active_mode.lock().unwrap() = None;
+        self.session_id.lock().unwrap().take()
+    }
+
+    pub fn require_mode(&self) -> Result<Arc<dyn ModeConfig>, String> {
+        self.active_mode
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| "No hay sesión activa".into())
     }
 }
 

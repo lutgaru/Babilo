@@ -16,7 +16,12 @@ use crate::{
     audio::capture::AudioCapture,
     audio::list_input_devices,
     errors::AppError,
+    modes::load_mode,
     schemas::{BabiloAnalysis, BabiloEvent, TokenEvent},
+    session::{
+        build_session_info, build_session_summary, compose_system_prompt, SessionInfo,
+        SessionSummary,
+    },
     state::AppState,
 };
 use serde::{Deserialize, Serialize};
@@ -49,6 +54,73 @@ pub struct ContextUsage {
 // ─────────────────────────────────────────────────────────────
 // Comandos
 // ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// Session
+// ─────────────────────────────────────────────────────────────
+/// Loads a mode from a .babilo.json file and starts a new session.
+///
+/// If llm_initiates=true, generates the opening line before responding
+/// to the frontend — the user sees the mode ready to speak from the first frame.
+///
+/// Returns SessionInfo with caps and opening_line so the frontend
+/// can configure the widgets without knowing the mode type.
+#[tauri::command]
+pub async fn start_session(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<crate::session::SessionInfo, String> {
+    // 1. Load the mode from JSON
+    let mode = load_mode(&path).map_err(|e| e.to_string())?;
+    let mode_arc: Arc<dyn crate::modes::ModeConfig> = Arc::new(mode);
+    // 2. Register in AppState — generates session_id
+    let session_id = state.start_session(Arc::clone(&mode_arc));
+    // 3. If the mode speaks first, generate opening_line now
+    //     We use the mode's opening_prompt as the first LLM turn.
+    let opening_line = if mode_arc.llm_initiates() {
+        match mode_arc.opening_prompt() {
+            // The mode has a fixed opening line — we use it directly
+            // without consuming LLM context (it's text, not inference)
+            Some(line) => Some(line.to_string()),
+            // The mode starts but has no fixed line — let the LLM generate
+            // TODO: invoke infer_text with compose_system_prompt here in phase 2
+            None => None,
+        }
+    } else {
+        None
+    };
+    // 4. Build response to the frontend
+    let info = build_session_info(session_id, &mode_arc, opening_line);
+    Ok(info)
+}
+/// Ends the active session and returns the summary.
+///
+/// For now, turns and scores come from the basic AppState.
+/// In phase 2, AppState will accumulate scores per turn during the session.
+#[tauri::command]
+pub fn end_session(state: State<'_, AppState>) -> Result<crate::session::SessionSummary, String> {
+    // Retrieve mode name before cleanup
+    let mode_name = state
+        .active_mode
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|m| m.name().to_string())
+        .unwrap_or_else(|| "Unknown".to_string());
+    // Clean up session — returns the session_id that was closed
+    let session_id = state
+        .end_session()
+        .ok_or_else(|| "No active session".to_string())?;
+    // Also reset LLM context for the next session
+    if let Ok(mut llm) = state.llm_engine.lock() {
+        if let Some(ref mut engine) = *llm {
+            let _ = engine.reset();
+        }
+    }
+    // TODO phase 2: read accumulated turns and scores from AppState
+    let summary = build_session_summary(session_id, mode_name, 0, &[]);
+    Ok(summary)
+}
 
 #[tauri::command]
 pub fn greet(name: &str) -> String {
@@ -347,4 +419,11 @@ pub fn get_context_usage(state: State<'_, AppState>) -> Result<ContextUsage, Str
             percent: 0.0,
         })
     }
+}
+
+#[tauri::command]
+async fn load_mode_from_path(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mode = load_mode(&path).map_err(|e| e.to_string())?;
+    *state.active_mode.lock().unwrap() = Some(Arc::new(mode));
+    Ok(())
 }

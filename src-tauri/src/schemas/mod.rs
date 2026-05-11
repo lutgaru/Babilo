@@ -9,8 +9,9 @@
  */
 
 pub mod analysis;
+pub mod session;
 pub use analysis::BabiloAnalysis;
-
+pub use session::{SessionCaps, SessionInfo, SessionSummary};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

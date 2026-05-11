@@ -24,6 +24,8 @@ pub mod state;
 pub mod tts;
 pub mod utils;
 pub mod schemas; 
+pub mod modes;
+pub mod session;
 
 // Re-export de commands para el macro
 pub use commands::*;
@@ -102,6 +104,8 @@ pub fn run() {
                 )),
                 sample_rate: std::sync::Mutex::new(16000),
                 preprocessor: audio::MelPreprocessor::new(16000, 128, 512),
+                active_mode: std::sync::Mutex::new(None),
+                session_id: std::sync::Mutex::new(None),
             });
 
             // Mostrar ventana principal
