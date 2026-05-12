@@ -17,17 +17,25 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use uuid::Uuid;
 
 use crate::{
-    modes::ModeConfig,
+    errors::{AppResult, SessionError},
+    modes::{load_mode_by_id, ModeConfig},
     schemas::master_system_instruction,
 };
 
-// ─── Structs that travel to the frontend ──────────────────────────────────────────
+// ─── Session States ─────────────────────────────────────────
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    Initialized,
+    Active,
+    Paused,
+    Ended,
+}
 
-/// Capabilities of the active mode.
-/// The frontend uses this to enable/disable widgets — never
-/// needs to know the concrete mode type.
+// ─── Structs sent to frontend ──────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionCaps {
     pub accepts_audio: bool,
@@ -49,39 +57,186 @@ pub struct SessionInfo {
     pub opening_line: Option<String>,
 }
 
-/// Response of end_session to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionSummary {
     pub session_id: String,
     pub mode_name: String,
-    /// Turns completed during the session
     pub turns: u32,
-    /// Average score of all turns (0 if no data)
     pub average_score: u8,
 }
 
-// ─── Session logic ────────────────────────────────────────────────────────
+// ─── Session Manager ─────────────────────────────────────────
 
-/// Composes the final system prompt that the LLM receives.
-///
-/// The mode can extend or replace the master instruction.
-/// For now it composes: master + "\n\n" + system_prompt of the mode.
-/// In phase 3 this can become more sophisticated (templates, variables).
-pub fn compose_system_prompt(mode: &dyn ModeConfig) -> String {
+pub struct SessionManager {
+    active_session: Option<Session>,
+}
+
+impl SessionManager {
+    pub fn new() -> Self {
+        Self {
+            active_session: None,
+        }
+    }
+
+    /// Start a new session with the specified mode
+    pub fn start_session(&mut self, mode_id: &str) -> AppResult<SessionInfo> {
+        // Check if there is already an active session
+        if self.active_session.is_some() {
+            return Err(SessionError::AlreadyActive.into());
+        }
+
+        // Load the mode
+        let mode = Arc::new(load_mode_by_id(mode_id)?);
+
+        // Verify the mode is available for sessions
+        // (you could add additional validation logic here)
+
+        // Generate UUID for the session
+        let session_id = Uuid::new_v4().to_string();
+
+        // Compose the system prompt
+        let system_prompt =
+            compose_system_prompt(mode.as_ref()).map_err(|e| SessionError::PromptComposition(e))?;
+
+        // Create the session
+        let session = Session {
+            id: session_id.clone(),
+            mode,
+            state: SessionState::Initialized,
+            system_prompt,
+            turns: 0,
+            scores: Vec::new(),
+        };
+
+        // Generate opening_line if the mode requires it
+        let opening_line = if session.mode.llm_initiates() {
+            // The LLM call to generate the first line would go here
+            // For now, None - resolved in the command layer
+            None
+        } else {
+            None
+        };
+
+        let session_info =
+            build_session_info(session_id.clone(), &session.mode, opening_line.clone());
+
+        // Activate the session
+        self.active_session = Some(session);
+
+        Ok(session_info)
+    }
+
+    /// Get information about the active session
+    pub fn get_active_session(&self) -> AppResult<&Session> {
+        self.active_session
+            .as_ref()
+            .ok_or_else(|| SessionError::NotInitialized.into())
+    }
+
+    /// Get mutable information about the active session
+    pub fn get_active_session_mut(&mut self) -> AppResult<&mut Session> {
+        self.active_session
+            .as_mut()
+            .ok_or_else(|| SessionError::NotInitialized.into())
+    }
+
+    /// End the active session and return a summary
+    pub fn end_session(&mut self) -> AppResult<SessionSummary> {
+        let session = self
+            .active_session
+            .take()
+            .ok_or_else(|| SessionError::NotFound("no active session".into()))?;
+
+        // Validate state transition
+        if session.state == SessionState::Ended {
+            return Err(SessionError::InvalidStateTransition {
+                from: "Ended".into(),
+                to: "Ended".into(),
+            }
+            .into());
+        }
+
+        Ok(build_session_summary(
+            session.id,
+            session.mode.name().to_string(),
+            session.turns,
+            &session.scores,
+        ))
+    }
+
+    /// Pause the active session
+    pub fn pause_session(&mut self) -> AppResult<()> {
+        let session = self.get_active_session_mut()?;
+
+        if session.state != SessionState::Active {
+            return Err(SessionError::InvalidStateTransition {
+                from: format!("{:?}", session.state),
+                to: "Paused".into(),
+            }
+            .into());
+        }
+
+        session.state = SessionState::Paused;
+        Ok(())
+    }
+
+    /// Resume the paused session
+    pub fn resume_session(&mut self) -> AppResult<()> {
+        let session = self.get_active_session_mut()?;
+
+        if session.state != SessionState::Paused {
+            return Err(SessionError::InvalidStateTransition {
+                from: format!("{:?}", session.state),
+                to: "Active".into(),
+            }
+            .into());
+        }
+
+        session.state = SessionState::Active;
+        Ok(())
+    }
+
+    /// Record a completed turn with its score
+    pub fn record_turn(&mut self, score: u8) -> AppResult<()> {
+        let session = self.get_active_session_mut()?;
+
+        if session.state != SessionState::Active {
+            return Err(SessionError::OperationNotAllowed(
+                "cannot record turn in non-active session".into(),
+            )
+            .into());
+        }
+
+        session.turns += 1;
+        session.scores.push(score);
+        Ok(())
+    }
+}
+
+// ─── Internal Session struct ─────────────────────────────────
+
+pub struct Session {
+    pub id: String,
+    pub mode: Arc<dyn ModeConfig>,
+    pub state: SessionState,
+    pub system_prompt: String,
+    pub turns: u32,
+    pub scores: Vec<u8>,
+}
+
+// ─── Helper functions ────────────────────────────────────────
+
+pub fn compose_system_prompt(mode: &dyn ModeConfig) -> Result<String, String> {
     let master = master_system_instruction();
     let mode_prompt = mode.system_prompt();
 
-    // If the mode already includes the master instruction (edge case), don't duplicate
     if mode_prompt.contains("<|babilo_analysis|>") {
-        return mode_prompt.to_string();
+        return Ok(mode_prompt.to_string());
     }
 
-    format!("{master}\n\n---\n\n{mode_prompt}")
+    Ok(format!("{master}\n\n---\n\n{mode_prompt}"))
 }
 
-/// Builds SessionInfo from an already loaded mode and a session_id.
-/// The opening_line is None here — it's resolved in the command after
-/// invoking the LLM if llm_initiates=true.
 pub fn build_session_info(
     session_id: String,
     mode: &Arc<dyn ModeConfig>,
@@ -100,7 +255,6 @@ pub fn build_session_info(
     }
 }
 
-/// Builds SessionSummary when closing a session.
 pub fn build_session_summary(
     session_id: String,
     mode_name: String,

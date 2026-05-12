@@ -8,7 +8,7 @@
  * (at your option) any later version.
  */
 
-//! Manejo de errores unificado con tipos específicos
+//! Unified error handling with specific types
 
 use thiserror::Error;
 
@@ -37,6 +37,12 @@ pub enum AppError {
 
     #[error("Tauri: {0}")]
     Tauri(String),
+
+    #[error("Modo: {0}")]
+    Mode(#[from] ModeError),
+
+    #[error("Sesión: {0}")]
+    Session(#[from] SessionError),
 }
 
 impl From<cpal::DevicesError> for AppError {
@@ -64,69 +70,69 @@ impl From<cpal::PauseStreamError> for AppError {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Errores específicos por dominio
+// Domain-specific errors
 // ─────────────────────────────────────────────────────────────
 
 #[derive(Error, Debug)]
 pub enum AudioError {
-    #[error("Dispositivo no encontrado: {0}")]
+    #[error("Device not found: {0}")]
     DeviceNotFound(String),
 
-    #[error("Configuración de dispositivo: {0}")]
+    #[error("Device configuration: {0}")]
     DeviceConfig(#[source] cpal::DevicesError),
 
-    #[error("Construcción de stream: {0}")]
+    #[error("Stream build: {0}")]
     StreamBuild(#[source] cpal::BuildStreamError),
 
-    #[error("Reproducción de stream: {0}")]
+    #[error("Stream play: {0}")]
     StreamPlay(#[source] cpal::PlayStreamError),
 
-    #[error("Pausa de stream: {0}")]
+    #[error("Stream pause: {0}")]
     StreamPause(#[source] cpal::PauseStreamError),
 
-    #[error("Formato de muestra no soportado")]
+    #[error("Unsupported sample format")]
     UnsupportedSampleFormat,
 
-    #[error("Buffer de audio vacío")]
+    #[error("Empty audio buffer")]
     EmptyBuffer,
 
-    #[error("Error de procesamiento: {0}")]
+    #[error("Processing error: {0}")]
     Processing(String),
 
-    #[error("Configuración de stream: {0}")]
-    StreamConfig(#[source] cpal::DefaultStreamConfigError), // ← nueva
+    #[error("Stream configuration: {0}")]
+    StreamConfig(#[source] cpal::DefaultStreamConfigError), // ← new
 
-    #[error("Captura ya activa")]
+    #[error("Capture already active")]
     CaptureAlreadyActive,
 }
 
 #[derive(Error, Debug)]
 pub enum LlmError {
-    #[error("Inicialización del backend: {0}")]
+    #[error("Backend initialization: {0}")]
     BackendInit(String),
 
-    #[error("Carga del modelo: {0}")]
+    #[error("Model loading: {0}")]
     ModelLoad(String),
 
-    #[error("Inicialización del contexto: {0}")]
+    #[error("Context initialization: {0}")]
     ContextInit(String),
 
-    #[error("Inicialización MTMD: {0}")]
+    #[error("MTMD initialization: {0}")]
     MtmdInit(String),
 
-    #[error("Tokenización: {0}")]
+    #[error("Tokenization: {0}")]
     Tokenization(String),
 
-    #[error("Decodificación: {0}")]
+    #[error("Decoding: {0}")]
     Decode(String),
 
-    #[error("Muestreo: {0}")]
+    #[error("Sampling: {0}")]
     Sampling(String),
 
-    #[error("Contexto lleno y sin capacidad de reset")]
+    #[error("Context full without reset capability")]
     ContextFull,
 
-    #[error("Modelo no inicializado")]
+    #[error("Model not initialized")]
     NotInitialized,
 
     #[error("Analysis missing field {0}")]
@@ -135,30 +141,97 @@ pub enum LlmError {
 
 #[derive(Error, Debug)]
 pub enum TtsError {
-    #[error("Carga de sesión ONNX: {0}")]
+    #[error("ONNX session loading: {0}")]
     SessionLoad(String),
 
-    #[error("Ejecución de inferencia: {0}")]
+    #[error("Inference execution: {0}")]
     Inference(String),
 
-    #[error("Carga de voz: {0}")]
+    #[error("Voice loading: {0}")]
     VoiceLoad(String),
 
-    #[error("Texto vacío")]
+    #[error("Empty text")]
     EmptyText,
 
-    #[error("Generación de audio: {0}")]
+    #[error("Audio generation: {0}")]
     AudioGeneration(String),
 
-    #[error("Configuración TTS no disponible")]
+    #[error("TTS configuration not available")]
     ConfigMissing,
 
-    #[error("Tensor ORT: {0}")]
-    Tensor(String), // ← nuevo, para Tensor::from_array
+    #[error("ORT Tensor: {0}")]
+    Tensor(String), // ← new, for Tensor::from_array
 }
 
 // ─────────────────────────────────────────────────────────────
-// Conversión a respuestas Tauri
+// Mode Errors
+// ─────────────────────────────────────────────────────────────
+
+#[derive(Error, Debug)]
+pub enum ModeError {
+    #[error("Modes directory not found: {0}")]
+    DirectoryNotFound(String),
+
+    #[error("Failed to read file '{path}': {source}")]
+    IoRead {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("Invalid JSON in '{path}': {source}")]
+    Parse {
+        path: String,
+        #[source]
+        source: serde_json::Error,
+    },
+
+    #[error("Mode not found: {0}")]
+    NotFound(String),
+
+    #[error("Duplicate mode with ID: {0}")]
+    DuplicateId(String),
+
+    #[error("Missing required field in mode '{path}': {field}")]
+    MissingField { path: String, field: String },
+
+    #[error("Mode validation failed: {0}")]
+    Validation(String),
+}
+
+// ─────────────────────────────────────────────────────────────
+// Session Errors
+// ─────────────────────────────────────────────────────────────
+
+#[derive(Error, Debug)]
+pub enum SessionError {
+    #[error("Session not found: {0}")]
+    NotFound(String),
+
+    #[error("Session already active for this user")]
+    AlreadyActive,
+
+    #[error("Attempt to operate on non-existent session")]
+    NotInitialized,
+
+    #[error("Invalid state transition: {from} → {to}")]
+    InvalidStateTransition { from: String, to: String },
+
+    #[error("Mode '{mode_id}' not available for session")]
+    ModeUnavailable { mode_id: String },
+
+    #[error("System prompt generation: {0}")]
+    PromptComposition(String),
+
+    #[error("Invalid UUID: {0}")]
+    InvalidUuid(String),
+
+    #[error("Operation not allowed in current state: {0}")]
+    OperationNotAllowed(String),
+}
+
+// ─────────────────────────────────────────────────────────────
+// Conversion to Tauri responses
 // ─────────────────────────────────────────────────────────────
 
 impl From<AppError> for String {
