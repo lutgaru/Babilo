@@ -19,8 +19,7 @@ use crate::{
     modes::{load_mode, ModeFileInfo},
     schemas::{BabiloAnalysis, BabiloEvent, TokenEvent},
     session::{
-        build_session_info, build_session_summary, compose_system_prompt, SessionInfo,
-        SessionSummary,
+        build_session_info, build_session_summary
     },
     state::AppState,
 };
@@ -419,13 +418,6 @@ pub fn get_context_usage(state: State<'_, AppState>) -> Result<ContextUsage, Str
             percent: 0.0,
         })
     }
-}
-
-#[tauri::command]
-async fn load_mode_from_path(path: String, state: State<'_, AppState>) -> Result<(), String> {
-    let mode = load_mode(&path).map_err(|e| e.to_string())?;
-    *state.active_mode.lock().unwrap() = Some(Arc::new(mode));
-    Ok(())
 }
 
 #[tauri::command]
