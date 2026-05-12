@@ -21,7 +21,7 @@ use uuid::Uuid;
 
 use crate::{
     errors::{AppResult, SessionError},
-    modes::{load_mode_by_id, ModeConfig},
+    modes::{load_mode, ModeConfig},
     schemas::master_system_instruction,
 };
 
@@ -79,14 +79,14 @@ impl SessionManager {
     }
 
     /// Start a new session with the specified mode
-    pub fn start_session(&mut self, mode_id: &str) -> AppResult<SessionInfo> {
+    pub fn start_session(&mut self, path: &str) -> AppResult<SessionInfo> {
         // Check if there is already an active session
         if self.active_session.is_some() {
             return Err(SessionError::AlreadyActive.into());
         }
 
         // Load the mode
-        let mode = Arc::new(load_mode_by_id(mode_id)?);
+        let mode = Arc::new(load_mode(path).map_err(|e| SessionError::LoadError(e.to_string()))?);
 
         // Verify the mode is available for sessions
         // (you could add additional validation logic here)
@@ -210,6 +210,13 @@ impl SessionManager {
         session.turns += 1;
         session.scores.push(score);
         Ok(())
+    }
+
+    pub fn require_mode(&self) -> AppResult<Arc<dyn ModeConfig>> {
+        self.active_session
+            .as_ref()
+            .map(|s| Arc::clone(&s.mode))
+            .ok_or_else(|| SessionError::NotInitialized.into())
     }
 }
 

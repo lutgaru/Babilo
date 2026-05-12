@@ -228,6 +228,9 @@ pub enum SessionError {
 
     #[error("Operation not allowed in current state: {0}")]
     OperationNotAllowed(String),
+
+    #[error("Session data load error: {0}")]
+    LoadError(String),
 }
 
 // ─────────────────────────────────────────────────────────────

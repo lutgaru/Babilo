@@ -16,11 +16,8 @@ use crate::{
     audio::capture::AudioCapture,
     audio::list_input_devices,
     errors::AppError,
-    modes::{load_mode, ModeFileInfo},
+    modes::{ModeFileInfo},
     schemas::{BabiloAnalysis, BabiloEvent, TokenEvent},
-    session::{
-        build_session_info, build_session_summary
-    },
     state::AppState,
 };
 use serde::{Deserialize, Serialize};
@@ -70,27 +67,11 @@ pub async fn start_session(
     state: State<'_, AppState>,
 ) -> Result<crate::session::SessionInfo, String> {
     // 1. Load the mode from JSON
-    let mode = load_mode(&path).map_err(|e| e.to_string())?;
-    let mode_arc: Arc<dyn crate::modes::ModeConfig> = Arc::new(mode);
-    // 2. Register in AppState — generates session_id
-    let session_id = state.start_session(Arc::clone(&mode_arc));
-    // 3. If the mode speaks first, generate opening_line now
-    //     We use the mode's opening_prompt as the first LLM turn.
-    let opening_line = if mode_arc.llm_initiates() {
-        match mode_arc.opening_prompt() {
-            // The mode has a fixed opening line — we use it directly
-            // without consuming LLM context (it's text, not inference)
-            Some(line) => Some(line.to_string()),
-            // The mode starts but has no fixed line — let the LLM generate
-            // TODO: invoke infer_text with compose_system_prompt here in phase 2
-            None => None,
-        }
-    } else {
-        None
-    };
-    // 4. Build response to the frontend
-    let info = build_session_info(session_id, &mode_arc, opening_line);
-    Ok(info)
+    let mut manager = state.session_manager.lock().map_err(|e| e.to_string())?;
+    match manager.start_session(&path) {
+        Ok(session_info) => Ok(session_info),
+        Err(e) => Err(e.to_string()),
+    }
 }
 /// Ends the active session and returns the summary.
 ///
@@ -99,26 +80,11 @@ pub async fn start_session(
 #[tauri::command]
 pub fn end_session(state: State<'_, AppState>) -> Result<crate::session::SessionSummary, String> {
     // Retrieve mode name before cleanup
-    let mode_name = state
-        .active_mode
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|m| m.name().to_string())
-        .unwrap_or_else(|| "Unknown".to_string());
-    // Clean up session — returns the session_id that was closed
-    let session_id = state
-        .end_session()
-        .ok_or_else(|| "No active session".to_string())?;
-    // Also reset LLM context for the next session
-    if let Ok(mut llm) = state.llm_engine.lock() {
-        if let Some(ref mut engine) = *llm {
-            let _ = engine.reset();
-        }
+    let mut manager = state.session_manager.lock().map_err(|e| e.to_string())?;
+    match manager.end_session() {
+        Ok(summary) => Ok(summary),
+        Err(e) => Err(e.to_string()),
     }
-    // TODO phase 2: read accumulated turns and scores from AppState
-    let summary = build_session_summary(session_id, mode_name, 0, &[]);
-    Ok(summary)
 }
 
 #[tauri::command]

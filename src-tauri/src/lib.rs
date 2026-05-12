@@ -8,11 +8,10 @@
  * (at your option) any later version.
  */
 
- 
 //! Biblioteca principal - solo configuración y setup de Tauri
 
-use tauri::{Manager, Builder};
-use crate::state::AppState;
+use crate::{session::SessionManager, state::AppState};
+use tauri::{Builder, Manager};
 
 // Módulos
 pub mod audio;
@@ -20,12 +19,12 @@ pub mod commands;
 pub mod config;
 pub mod errors;
 pub mod llama;
+pub mod modes;
+pub mod schemas;
+pub mod session;
 pub mod state;
 pub mod tts;
 pub mod utils;
-pub mod schemas; 
-pub mod modes;
-pub mod session;
 
 // Re-export de commands para el macro
 pub use commands::*;
@@ -67,7 +66,7 @@ pub fn run() {
                     eprintln!("⚠️ mmproj not found, text-only mode");
                     None
                 };
-                
+
                 match llama::LlmModel::new(&model_path, mmproj, config::LlmConfig::default()) {
                     Ok(model) => Some(llama::InferenceEngine::new(model)),
                     Err(e) => {
@@ -81,10 +80,7 @@ pub fn run() {
             };
 
             // Inicializar TTS
-            let tts_engine = match tts::TtsEngine::new(
-                tts::assets_dir(),
-                app.handle().clone()
-            ) {
+            let tts_engine = match tts::TtsEngine::new(tts::assets_dir(), app.handle().clone()) {
                 Ok(e) => {
                     eprintln!("✅ TTS Engine initialized");
                     Some(e)
@@ -102,13 +98,12 @@ pub fn run() {
                 llm_engine: std::sync::Arc::new(std::sync::Mutex::new(llm_engine)),
                 audio_capture: std::sync::Mutex::new(None),
                 audio_stream: std::sync::Mutex::new(None),
-                audio_buffer: std::sync::Arc::new(std::sync::Mutex::new(
-                    Vec::with_capacity(16000 * 30)
-                )),
+                audio_buffer: std::sync::Arc::new(std::sync::Mutex::new(Vec::with_capacity(
+                    16000 * 30,
+                ))),
                 sample_rate: std::sync::Mutex::new(16000),
                 preprocessor: audio::MelPreprocessor::new(16000, 128, 512),
-                active_mode: std::sync::Mutex::new(None),
-                session_id: std::sync::Mutex::new(None),
+                session_manager: std::sync::Mutex::new(SessionManager::new()),
             });
 
             // Mostrar ventana principal
