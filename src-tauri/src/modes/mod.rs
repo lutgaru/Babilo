@@ -9,8 +9,8 @@
  */
 
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use std::fs;
+use std::path::{Path, PathBuf};
 
 use crate::errors::{AppResult, ModeError};
 
@@ -41,7 +41,8 @@ pub struct BabiloModeFile {
     pub id: String,
     pub name: String,
     pub description: Option<String>,
-    pub system_prompt: String,
+    pub mode_prompt: String,
+    pub role_prompt: Option<String>,
     pub opening_prompt: Option<String>,
     pub caps: ModeCaps,
 }
@@ -50,7 +51,8 @@ pub struct BabiloModeFile {
 pub trait ModeConfig: Send + Sync {
     fn id(&self) -> &str;
     fn name(&self) -> &str;
-    fn system_prompt(&self) -> &str;
+    fn mode_prompt(&self) -> &str;
+    fn role_prompt(&self) -> Option<&str>;
     fn opening_prompt(&self) -> Option<&str>;
     fn llm_initiates(&self) -> bool;
     fn accepts_audio(&self) -> bool;
@@ -68,8 +70,11 @@ impl ModeConfig for BabiloMode {
     fn name(&self) -> &str {
         &self.file.name
     }
-    fn system_prompt(&self) -> &str {
-        &self.file.system_prompt
+    fn mode_prompt(&self) -> &str {
+        &self.file.mode_prompt
+    }
+    fn role_prompt(&self) -> Option<&str> {
+        self.file.role_prompt.as_deref()
     }
     fn opening_prompt(&self) -> Option<&str> {
         self.file.opening_prompt.as_deref()

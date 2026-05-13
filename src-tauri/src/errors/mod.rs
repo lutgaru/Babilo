@@ -231,6 +231,12 @@ pub enum SessionError {
 
     #[error("Session data load error: {0}")]
     LoadError(String),
+
+    #[error("Inference error: {0}")]
+    InferenceError(String),
+
+    #[error("Lock error: {0}")]
+    LockError(String),
 }
 
 // ─────────────────────────────────────────────────────────────

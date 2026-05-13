@@ -8,7 +8,7 @@
  * (at your option) any later version.
  */
 
-//! Gestión del estado global de la aplicación
+//! Global application state management
 
 use cpal::traits::StreamTrait;
 use std::sync::{Arc, Mutex};
@@ -16,12 +16,10 @@ use std::sync::{Arc, Mutex};
 use crate::{
     audio::{AudioCapture, MelPreprocessor},
     config::AppConfig,
-    llama::InferenceEngine,
     session::SessionManager,
-    tts::TtsEngine,
 };
 
-/// Wrapper seguro para cpal::Stream (no Send por defecto)
+/// Safe wrapper for cpal::Stream (not Send by default)
 pub struct SafeStream(Option<cpal::Stream>);
 
 unsafe impl Send for SafeStream {}
@@ -45,7 +43,7 @@ impl SafeStream {
     }
 }
 
-/// Handle público para controlar el stream de audio desde commands
+/// Public handle to control the audio stream from commands
 #[derive(Clone)]
 pub struct AudioStreamHandle {
     inner: Arc<Mutex<Option<SafeStream>>>,
@@ -77,38 +75,32 @@ impl AudioStreamHandle {
     }
 }
 
-/// Estado global accesible desde los commands de Tauri
+/// Global state accessible from Tauri commands
 pub struct AppState {
-    /// Configuración de la aplicación
+    /// Application configuration
     pub config: AppConfig,
 
-    /// Motor TTS (ONNX)
-    pub tts_engine: Arc<Mutex<Option<TtsEngine>>>,
-
-    /// Motor LLM (llama.cpp)
-    pub llm_engine: Arc<Mutex<Option<InferenceEngine>>>,
-
-    /// Capturador de audio (hardware)
+    /// Audio capture (hardware)
     pub audio_capture: Mutex<Option<AudioCapture>>,
 
-    /// Handle al stream activo de CPAL
+    /// Handle to the active CPAL stream
     pub audio_stream: Mutex<Option<AudioStreamHandle>>,
 
-    /// Buffer compartido para samples de audio
+    /// Shared buffer for audio samples
     pub audio_buffer: Arc<Mutex<Vec<f32>>>,
 
-    /// Frecuencia de muestreo actual del dispositivo
+    /// Current device sample rate
     pub sample_rate: Mutex<u32>,
 
-    /// Preprocesador de features (Mel/FFT)
+    /// Features preprocessor (Mel/FFT)
     pub preprocessor: MelPreprocessor,
 
     /// Session manager handling session lifecycle and state
-    pub session_manager: Mutex<SessionManager>,
+    pub session_manager: Arc<Mutex<SessionManager>>,
 }
 
 impl AppState {
-    /// Constructor con configuración por defecto
+    /// Constructor with default configuration
     pub fn new() -> Self {
         let config = AppConfig::default();
         let preprocessor = MelPreprocessor::new(
@@ -119,18 +111,16 @@ impl AppState {
 
         Self {
             config,
-            tts_engine: Arc::new(Mutex::new(None)),
-            llm_engine: Arc::new(Mutex::new(None)),
             audio_capture: Mutex::new(None),
             audio_stream: Mutex::new(None),
             audio_buffer: Arc::new(Mutex::new(Vec::with_capacity(16000 * 30))),
             sample_rate: Mutex::new(16000),
             preprocessor,
-            session_manager: Mutex::new(SessionManager::new()),
+            session_manager: Arc::new(Mutex::new(SessionManager::new())),
         }
     }
 
-    /// Verifica si hay un stream de audio activo
+    /// Checks if there is an active audio stream
     pub fn is_listening(&self) -> bool {
         self.audio_stream
             .lock()
@@ -138,12 +128,12 @@ impl AppState {
             .unwrap_or(false)
     }
 
-    /// Obtiene una referencia al buffer de audio
+    /// Gets a reference to the audio buffer
     pub fn audio_buffer(&self) -> Arc<Mutex<Vec<f32>>> {
         Arc::clone(&self.audio_buffer)
     }
 
-    /// Limpia el buffer de audio
+    /// Clears the audio buffer
     pub fn clear_audio_buffer(&self) {
         if let Ok(mut buf) = self.audio_buffer.lock() {
             buf.clear();

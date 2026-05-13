@@ -39,7 +39,6 @@ pub fn run() {
             commands::list_voices,
             commands::list_audio_devices,
             commands::start_listening,
-            commands::stop_and_process,
             commands::stop_and_process_streaming,
             commands::test_inference,
             commands::reset_conversation,
@@ -94,8 +93,6 @@ pub fn run() {
             // Configurar estado global
             app.manage(AppState {
                 config: config::AppConfig::default(),
-                tts_engine: std::sync::Arc::new(std::sync::Mutex::new(tts_engine)),
-                llm_engine: std::sync::Arc::new(std::sync::Mutex::new(llm_engine)),
                 audio_capture: std::sync::Mutex::new(None),
                 audio_stream: std::sync::Mutex::new(None),
                 audio_buffer: std::sync::Arc::new(std::sync::Mutex::new(Vec::with_capacity(
@@ -103,9 +100,15 @@ pub fn run() {
                 ))),
                 sample_rate: std::sync::Mutex::new(16000),
                 preprocessor: audio::MelPreprocessor::new(16000, 128, 512),
-                session_manager: std::sync::Mutex::new(SessionManager::new()),
+                session_manager: std::sync::Arc::new(std::sync::Mutex::new(SessionManager::new())),
             });
 
+            //load engines into session manager
+            {
+                let state = app.state::<AppState>();
+                let mut manager = state.session_manager.lock().unwrap();
+                manager.load_engines(llm_engine, tts_engine);
+            }
             // Mostrar ventana principal
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
