@@ -52,26 +52,24 @@ pub async fn start_session(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<crate::session::SessionInfo, String> {
-    // ── Phase 1: everything that needs the lock (synchronous) ──────
-    let (session_info, turn_prompt, should_infer) = {
+    let (session_info, turn_prompt) = {
         let mut manager = state.session_manager.lock().map_err(|e| e.to_string())?;
         let info = manager.start_session(&path).map_err(|e| e.to_string())?;
-        let prompt = manager.get_turn_prompt("", false).unwrap_or_default();
         let should_infer = info.caps.llm_initiates;
-        (info, prompt, should_infer)
-        // lock is released here ↑
+        let prompt = if should_infer {
+            Some(manager.get_turn_prompt("", false).unwrap_or_default())
+        } else {
+            None
+        };
+        (info, prompt)
     };
 
-    // ── Phase 2: inference without active borrow of State<'_> ────
-    if should_infer {
-        // Clone the Arc — SessionManager has the engines inside
-        let manager_arc = Arc::clone(&state.session_manager);
-        let audio_raw = get_silence_buffer(); // opening line: no real audio
-
-        {
-            let manager = manager_arc.lock().map_err(|e| e.to_string())?;
-            manager.run_turn_streaming(audio_raw, turn_prompt, app);
-        }
+    if let Some(prompt) = turn_prompt {
+        state
+            .session_manager
+            .lock()
+            .map_err(|e| e.to_string())?
+            .run_turn_streaming(None, prompt, app);
     }
 
     Ok(session_info)
@@ -158,8 +156,9 @@ pub async fn stop_and_process_streaming(
     // Arc cloned before any await — State<'_> free
     let manager_arc = Arc::clone(&state.session_manager);
     {
-        let manager = manager_arc.lock().map_err(|e| e.to_string())?;
-        manager.run_turn_streaming(resampled, prompt, app);
+        let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
+        let fullprompt = manager.get_turn_prompt(&prompt, true).unwrap_or_default();
+        manager.run_turn_streaming(Some(resampled), fullprompt, app);
     }
 
     Ok(())
@@ -268,8 +267,3 @@ pub async fn get_list_modes() -> Result<Vec<ModeFileInfo>, String> {
 }
 
 // ─── Private helpers ─────────────────────────────────────────
-
-/// Silence buffer for the opening line (the LLM doesn't need real audio).
-fn get_silence_buffer() -> Vec<f32> {
-    vec![0.0f32; 16000] // 1 second of silence at 16kHz
-}

@@ -252,8 +252,12 @@ impl SessionManager {
     //   1. Lock SessionManager → get turn_prompt → drop lock
     //   2. Clone Arc<Mutex<SessionManager>> and call run_turn_streaming
 
-    pub fn run_turn_streaming(&self, audio_raw: Vec<f32>, prompt: String, app: tauri::AppHandle) {
-        // Clone Arcs — no borrow of self crosses the spawn boundary
+    pub fn run_turn_streaming(
+        &self,
+        audio_raw: Option<Vec<f32>>,
+        prompt: String,
+        app: tauri::AppHandle,
+    ) {
         let llm_engine = Arc::clone(&self.llm_engine);
         let tts_engine = Arc::clone(&self.tts_engine);
 
@@ -289,44 +293,49 @@ impl SessionManager {
                     let mut response_buf = String::new();
                     let mut tts_tx_opt = Some(tts_tx);
 
-                    let result =
-                        model.infer_audio_streaming(&audio_raw, &prompt, |event| match event {
-                            TokenEvent::ResponseToken(text) => {
-                                response_buf.push_str(&text);
-                            }
-                            TokenEvent::SentinelReached => {
-                                let partial = response_buf.trim().to_string();
-                                if !partial.is_empty() {
-                                    if let Some(tx) = &tts_tx_opt {
-                                        let _ = tx.send(partial);
-                                    }
-                                }
-                                emit(BabiloEvent::SentinelReached);
-                            }
-                            TokenEvent::AnalysisToken(text) => {
-                                analysis_buf.push_str(&text);
-                            }
-                            TokenEvent::Done => {
-                                drop(tts_tx_opt.take());
-                                let final_response = response_buf.trim().to_string();
-                                if final_response.is_empty() {
-                                    emit(BabiloEvent::Error {
-                                        message: "Empty response from model".into(),
-                                    });
-                                    return;
-                                }
-                                match BabiloAnalysis::builder()
-                                    .with_response(final_response)
-                                    .with_json_payload(&analysis_buf)
-                                    .and_then(|b| b.build())
-                                {
-                                    Ok(data) => emit(BabiloEvent::Analysis { data }),
-                                    Err(e) => emit(BabiloEvent::Error {
-                                        message: e.to_string(),
-                                    }),
+                    let on_token = |event| match event {
+                        TokenEvent::ResponseToken(text) => {
+                            response_buf.push_str(&text);
+                        }
+                        TokenEvent::SentinelReached => {
+                            let partial = response_buf.trim().to_string();
+                            if !partial.is_empty() {
+                                if let Some(tx) = &tts_tx_opt {
+                                    let _ = tx.send(partial);
                                 }
                             }
-                        });
+                            eprint!("Sentinel reached. Switching to analysis phase.\n");
+                            emit(BabiloEvent::SentinelReached);
+                        }
+                        TokenEvent::AnalysisToken(text) => {
+                            analysis_buf.push_str(&text);
+                        }
+                        TokenEvent::Done => {
+                            drop(tts_tx_opt.take());
+                            let final_response = response_buf.trim().to_string();
+                            if final_response.is_empty() {
+                                emit(BabiloEvent::Error {
+                                    message: "Empty response from model".into(),
+                                });
+                                return;
+                            }
+                            match BabiloAnalysis::builder()
+                                .with_response(final_response)
+                                .with_json_payload(&analysis_buf)
+                                .and_then(|b| b.build())
+                            {
+                                Ok(data) => emit(BabiloEvent::Analysis { data }),
+                                Err(e) => emit(BabiloEvent::Error {
+                                    message: e.to_string(),
+                                }),
+                            }
+                        }
+                    };
+
+                    let result = match audio_raw {
+                        Some(ref pcm) => model.infer_audio_streaming(pcm, &prompt, on_token),
+                        None => model.infer_text_streaming(&prompt, on_token),
+                    };
 
                     if let Err(e) = result {
                         emit(BabiloEvent::Error {
@@ -416,36 +425,33 @@ pub fn build_turn_prompt(
     user_input: &str,
     is_audio: bool,
 ) -> String {
-    let mut parts = Vec::with_capacity(5);
+    let marker = llama_cpp_2::mtmd::mtmd_default_marker();
 
-    if !injection.role_injected {
-        parts.push(format!("[ROLE]\n{}", hierarchy.role_prompt));
-        injection.role_injected = true;
-    }
-    if injection.turns_processed == 0 {
-        parts.push(format!("[MODE]\n{}", hierarchy.mode_prompt));
-    }
+    let mut parts = Vec::with_capacity(4);
+
     if injection.turns_processed == 0 || injection.should_remind_system(SYSTEM_REMINDER_INTERVAL) {
-        parts.push(format!("[SYSTEM FORMAT]\n{}", hierarchy.system_format));
+        let system = format!(
+            "{}.{}.\n{}",
+            hierarchy.mode_prompt.trim(),
+            hierarchy.role_prompt.trim(),
+            hierarchy.system_format.trim(),
+        );
+        parts.push(system);
     }
-
-    parts.push(format!("[USER]\n{}", user_input.trim()));
-
-    let content = parts.join("\n\n");
-    let base = format!("<|turn|>user\n{content}<|turn|>\n<|turn|>model\n");
 
     if is_audio {
-        let marker = llama_cpp_2::mtmd::mtmd_default_marker();
-        let json_reminder =
-            "\n[REMINDER: After conversational reply, output <|babilo_analysis|> followed by valid JSON.]";
-        if let Some(pos) = base.find("<|turn|>user\n") {
-            let insert = pos + "<|turn|>user\n".len();
-            let (before, after) = base.split_at(insert);
-            return format!("{before}{marker}{after}{json_reminder}");
-        }
+        parts.push(marker.to_string());
     }
 
-    injection.increment();
+    if !user_input.trim().is_empty() {
+        parts.push(user_input.trim().to_string());
+    }
 
-    base
+    let content = parts.join("\n");
+    let prompt = format!("<|turn|>user\n{content}\n<|turn|>\n<|turn|>model\n");
+
+    injection.increment();
+    eprint!("Generated prompt:\n{prompt}\n--- End of prompt ---\n");
+
+    prompt
 }

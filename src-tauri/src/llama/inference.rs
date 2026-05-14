@@ -14,7 +14,7 @@ use crate::{
     config::LlmConfig,
     errors::{AppError, LlmError},
     llama::model::LlmModel,
-    schemas::{master_system_instruction, TokenEvent, SENTINEL},
+    schemas::{TokenEvent, SENTINEL},
 };
 use llama_cpp_2::{
     context::LlamaContext,
@@ -137,9 +137,8 @@ impl InferenceEngine {
         prompt: &str,
         on_token: impl FnMut(TokenEvent), // ← closure, not Sender
     ) -> Result<(), AppError> {
-        let full_prompt = build_babilo_audio_prompt(prompt, &self.state);
         let add_special = !self.state.system_prompt_evaluated;
-        eprint!("Prompt completo:\n{}\n", full_prompt);
+        eprint!("Prompt completo:\n{}\n", prompt);
         let audio_bitmap = MtmdBitmap::from_audio_data(audio_pcm)
             .map_err(|e| LlmError::ModelLoad(e.to_string()))?;
 
@@ -151,7 +150,7 @@ impl InferenceEngine {
 
             mtmd.tokenize(
                 MtmdInputText {
-                    text: full_prompt,
+                    text: prompt.to_string(),
                     add_special,
                     parse_special: true,
                 },
@@ -174,6 +173,35 @@ impl InferenceEngine {
             .map_err(|e| LlmError::Decode(e.to_string()))?;
 
         self.state.n_past = new_n_past;
+        self.state.system_prompt_evaluated = true;
+
+        generate_babilo_streaming(ctx, &mut self.state, &config, on_token)?;
+
+        Ok(())
+    }
+
+    pub fn infer_text_streaming(
+        &mut self,
+        prompt: &str,
+        on_token: impl FnMut(TokenEvent),
+    ) -> Result<(), AppError> {
+        let add_bos = bos_flag(&self.state);
+        eprint!("Prompt completo:\n{}\n", prompt);
+
+        let tokens = self
+            .model
+            .model()
+            .str_to_token(prompt, add_bos)
+            .map_err(|e| LlmError::Tokenization(e.to_string()))?;
+
+        let n_ctx = self.model.n_ctx();
+        let config = self.model.config().clone();
+
+        let ctx = self.model.ctx_mut()?;
+
+        ensure_context_space(ctx, &mut self.state, n_ctx, tokens.len())?;
+        decode_tokens(ctx, &mut self.state, &tokens)?;
+
         self.state.system_prompt_evaluated = true;
 
         generate_babilo_streaming(ctx, &mut self.state, &config, on_token)?;
@@ -423,28 +451,3 @@ fn build_audio_prompt(prompt: &str, state: &InferenceState) -> String {
     }
 }
 
-// inference.rs — fix build_audio_prompt to use master_system_instruction
-fn build_babilo_audio_prompt(prompt: &str, state: &InferenceState) -> String {
-    let marker = mtmd_default_marker();
-    let system = master_system_instruction(); // ← was system_instruction()
-    let json_reminder =
-        "Remember: reply ONLY with the JSON object after the sentinel, no extra text.";
-
-    let prompt_content = if prompt.is_empty() {
-        String::new()
-    } else {
-        format!("\n{}", prompt.trim())
-    };
-
-    if !state.system_prompt_evaluated {
-        format!(
-            "<|turn|>user\n{}\n{}{}\n{}<|turn|>\n<|turn|>model\n",
-            system, marker, prompt_content, json_reminder
-        )
-    } else {
-        format!(
-            "<|turn|>user\n{}{}\n{}<|turn|>\n<|turn|>model\n",
-            marker, prompt_content, json_reminder
-        )
-    }
-}

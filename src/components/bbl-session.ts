@@ -108,21 +108,26 @@ export class BblSession extends LitElement {
       }
     } else {
       this.aiState = 'thinking';
+      this.recording = false;
+      this.stopTimer();
+
       this._unlistenStream = await listen('babilo://stream', ({ payload }) => {
-        this.handleStreamEvent(payload as StreamEvent);
+        const event = payload as StreamEvent;
+        this.handleStreamEvent(event);
+
+        if (event.type === 'analysis' || event.type === 'error') {
+          this._unlistenStream?.();
+          this._unlistenStream = null;
+        }
       });
+
       try {
-   // The system prompt already comes from the active mode in the backend —
-    // this prompt is just for compatibility with the existing signature
         await stopAndProcess2('');
       } catch (err) {
         console.error('Error procesando audio:', err);
         this.aiState = 'idle';
-      } finally {
-        this.recording = false;
         this._unlistenStream?.();
         this._unlistenStream = null;
-        this.stopTimer();
       }
     }
   }
@@ -132,14 +137,20 @@ export class BblSession extends LitElement {
     if (!text.trim()) return;
     this.aiState = 'thinking';
     this._unlistenStream = await listen('babilo://stream', ({ payload }) => {
-      this.handleStreamEvent(payload as StreamEvent);
+      const event = payload as StreamEvent;
+      this.handleStreamEvent(event);
+
+      if (event.type === 'analysis' || event.type === 'error') {
+        this._unlistenStream?.();
+        this._unlistenStream = null;
+      }
     });
+
     try {
       await stopAndProcess2(text);
     } catch (err) {
       console.error('Error procesando texto:', err);
       this.aiState = 'idle';
-    } finally {
       this._unlistenStream?.();
       this._unlistenStream = null;
     }
@@ -185,21 +196,21 @@ export class BblSession extends LitElement {
             placeholder="Type your answer..."
             ?disabled=${this.aiState === 'thinking' || this.aiState === 'speaking'}
             @keydown=${(e: KeyboardEvent) => {
-              if (e.key === 'Enter') {
-                const input = e.target as HTMLInputElement;
-                this.submitText(input.value);
-                input.value = '';
-              }
-            }}
+          if (e.key === 'Enter') {
+            const input = e.target as HTMLInputElement;
+            this.submitText(input.value);
+            input.value = '';
+          }
+        }}
             class="flex-1 bg-[var(--bbl-surface)] border border-[var(--bbl-border)]
                    rounded-xl px-4 py-2 text-sm text-[var(--bbl-text)]
                    placeholder:text-[var(--bbl-muted)] outline-none
                    focus:border-[var(--bbl-accent)] transition-colors"/>
           <button
             @click=${() => {
-              const input = this.shadowRoot?.querySelector('#text-input') as HTMLInputElement;
-              if (input) { this.submitText(input.value); input.value = ''; }
-            }}
+          const input = this.shadowRoot?.querySelector('#text-input') as HTMLInputElement;
+          if (input) { this.submitText(input.value); input.value = ''; }
+        }}
             ?disabled=${this.aiState === 'thinking' || this.aiState === 'speaking'}
             class="px-4 py-2 rounded-xl bg-[var(--bbl-accent)] text-white text-sm
                    disabled:opacity-40 transition-opacity">
@@ -223,7 +234,7 @@ export class BblSession extends LitElement {
   render() {
     const statusText = this.recording ? 'Recording'
       : this.aiState === 'idle' ? 'Ready'
-      : this.aiState;
+        : this.aiState;
 
     return html`
       <div class="flex flex-col h-screen bg-[var(--bbl-bg)]">

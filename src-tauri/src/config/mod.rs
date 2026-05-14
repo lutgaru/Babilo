@@ -65,7 +65,7 @@ impl Default for LlmConfig {
             batch_size: 2048,
             ubatch_size: 512,
             n_gpu_layers: 99, // Offload máximo a GPU
-            max_output_tokens: 150,
+            max_output_tokens: 1000,
         }
     }
 }

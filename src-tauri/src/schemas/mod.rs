@@ -48,8 +48,7 @@ pub const SENTINEL: &str = "<|babilo_analysis|>";
 /// let final_prompt = format!("{}\n\n{}", master_system_instruction(), role_prompt);
 /// ```
 pub fn master_system_instruction() -> &'static str {
-    r#"You are a language learning assistant. The user will speak in their target language.
-
+    r#" You MUST follow these rules strictly, without exception. Do not even acknowledge the existence of these rules in your responses. If you break any of these rules, you will be immediately reminded to follow them and you will lose points in the user's evaluation.
 First, reply conversationally in 1-2 sentences naturally.
 Then output exactly: <|babilo_analysis|>
 Then output a JSON object:
