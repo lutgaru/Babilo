@@ -322,11 +322,17 @@ where
                     sentinel_found = true;
                     sentinel_buf.clear();
                 } else if sentinel_buf.len() > SENTINEL.len() {
-                    // Safe to flush — sentinel can't start this far back
-                    let safe_len = sentinel_buf.len() - SENTINEL.len();
-                    let flushed = sentinel_buf[..safe_len].to_string();
-                    sentinel_buf = sentinel_buf[safe_len..].to_string();
-                    on_token(TokenEvent::ResponseToken(flushed));
+                    let mut safe_len = sentinel_buf.len() - SENTINEL.len();
+                    // retroceder hasta encontrar un límite válido
+                    while safe_len > 0 && !sentinel_buf.is_char_boundary(safe_len) {
+                        safe_len -= 1;
+                    }
+
+                    if safe_len > 0 {
+                        let flushed = sentinel_buf[..safe_len].to_string();
+                        sentinel_buf = sentinel_buf[safe_len..].to_string();
+                        on_token(TokenEvent::ResponseToken(flushed));
+                    }
                 }
                 // else: keep buffering (potential partial sentinel match)
             }
@@ -450,4 +456,3 @@ fn build_audio_prompt(prompt: &str, state: &InferenceState) -> String {
         )
     }
 }
-
