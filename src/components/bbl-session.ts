@@ -11,7 +11,7 @@ import {
   AIState, BabiloAnalysis, SessionInfo,
   SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
-import { endSession, startListening, stopAndProcess2, processTextStreaming} from '../invoke';
+import { endSession, startListening, stopAndProcess2, processTextStreaming } from '../invoke';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
@@ -42,9 +42,12 @@ export class BblSession extends LitElement {
     if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
 
     // If the mode speaks first, show the opening line immediately
-    if (this.sessionInfo.opening_line) {
-      this.response = this.sessionInfo.opening_line;
-      this.aiState = 'speaking';
+    if (this.sessionInfo.caps.llm_initiates) {
+      this.aiState = 'thinking';
+      console.log('Opening line:', this.sessionInfo.opening_line);
+      // Register stream listener to capture user response events
+      this._setupStreamListener();
+
       // After showing it, return to idle so the user can respond
       setTimeout(() => { this.aiState = 'idle'; }, 1200);
     }
@@ -52,8 +55,35 @@ export class BblSession extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._unlistenStream?.();
+    this._cleanupStreamListener();
     this.stopTimer();
+  }
+
+  // ── Stream listener management (DRY) ──
+  private _setupStreamListener() {
+    // Clean up any existing listener first
+    this._cleanupStreamListener();
+
+    listen('babilo://stream', ({ payload }) => {
+      const event = payload as StreamEvent;
+      this.handleStreamEvent(event);
+
+      // Auto-unsubscribe on terminal events
+      if (event.type === 'analysis' || event.type === 'error') {
+        this._cleanupStreamListener();
+      }
+    }).then(unlistenFn => {
+      this._unlistenStream = unlistenFn;
+    }).catch(err => {
+      console.error('Error setting up stream listener:', err);
+    });
+  }
+
+  private _cleanupStreamListener() {
+    if (this._unlistenStream) {
+      this._unlistenStream();
+      this._unlistenStream = null;
+    }
   }
 
   // ── Timer ──
@@ -70,7 +100,7 @@ export class BblSession extends LitElement {
 
   // ── Colgar ──
   private async hangUp() {
-    this._unlistenStream?.();
+    this._cleanupStreamListener();
     this.stopTimer();
     try {
       const summary: SessionSummary = await endSession();
@@ -111,23 +141,14 @@ export class BblSession extends LitElement {
       this.recording = false;
       this.stopTimer();
 
-      this._unlistenStream = await listen('babilo://stream', ({ payload }) => {
-        const event = payload as StreamEvent;
-        this.handleStreamEvent(event);
-
-        if (event.type === 'analysis' || event.type === 'error') {
-          this._unlistenStream?.();
-          this._unlistenStream = null;
-        }
-      });
+      // Setup stream listener for backend response
+      this._setupStreamListener();
 
       try {
         await stopAndProcess2('');
       } catch (err) {
         console.error('Error procesando audio:', err);
         this.aiState = 'idle';
-        this._unlistenStream?.();
-        this._unlistenStream = null;
       }
     }
   }
@@ -136,23 +157,15 @@ export class BblSession extends LitElement {
   private async submitText(text: string) {
     if (!text.trim()) return;
     this.aiState = 'thinking';
-    this._unlistenStream = await listen('babilo://stream', ({ payload }) => {
-      const event = payload as StreamEvent;
-      this.handleStreamEvent(event);
 
-      if (event.type === 'analysis' || event.type === 'error') {
-        this._unlistenStream?.();
-        this._unlistenStream = null;
-      }
-    });
+    // Setup stream listener for backend response
+    this._setupStreamListener();
 
     try {
       await processTextStreaming(text);
     } catch (err) {
       console.error('Error procesando texto:', err);
       this.aiState = 'idle';
-      this._unlistenStream?.();
-      this._unlistenStream = null;
     }
   }
 

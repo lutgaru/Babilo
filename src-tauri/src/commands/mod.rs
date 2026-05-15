@@ -174,7 +174,7 @@ pub async fn process_text_streaming(
     let manager_arc = Arc::clone(&state.session_manager);
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
-        let fullprompt = manager.get_turn_prompt(&prompt, true).unwrap_or_default();
+        let fullprompt = manager.get_turn_prompt(&prompt, false).unwrap_or_default();
         manager.run_turn_streaming(None, fullprompt, app);
     }
 
