@@ -46,6 +46,7 @@ pub fn run() {
             commands::start_session,
             commands::end_session,
             commands::get_list_modes,
+            commands::process_text_streaming
         ])
         .setup(|app| {
             // Inicializar logging

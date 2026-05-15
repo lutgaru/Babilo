@@ -164,6 +164,23 @@ pub async fn stop_and_process_streaming(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn process_text_streaming(
+    prompt: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    // Arc cloned before any await — State<'_> free
+    let manager_arc = Arc::clone(&state.session_manager);
+    {
+        let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
+        let fullprompt = manager.get_turn_prompt(&prompt, true).unwrap_or_default();
+        manager.run_turn_streaming(None, fullprompt, app);
+    }
+
+    Ok(())
+}
+
 // ─── TTS ─────────────────────────────────────────────────────
 
 #[tauri::command]

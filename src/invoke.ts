@@ -12,6 +12,7 @@ export const stopAndProcess = (prompt: string) => tauriInvoke('stop_and_process'
 export const synthesize = (text: string) => tauriInvoke('synthesize', { text, voice: 'F1' });
 export const testInference = (testPrompt: string) => tauriInvoke('test_inference', { testPrompt });
 export const stopAndProcess2 = (prompt: string) => tauriInvoke('stop_and_process_streaming', { prompt });
+export const processTextStreaming = (prompt: string) => tauriInvoke('process_text_streaming', { prompt });
 export const endSession = (): Promise<SessionSummary> => tauriInvoke('end_session');
 export const listModes = (): Promise<ModeFileInfo[]> => tauriInvoke('get_list_modes');
 export const startSession = (path: string): Promise<SessionInfo> => tauriInvoke('start_session', { path });
