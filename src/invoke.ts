@@ -8,7 +8,7 @@ import { AudioDevice, ModeFileInfo, SessionInfo, SessionSummary } from './types/
 
 export const listAudioDevices = (): Promise<AudioDevice[]> => tauriInvoke('list_audio_devices');
 export const startListening = (deviceName: string | null) => tauriInvoke('start_listening', { deviceName });
-export const stopAndProcess2 = (prompt: string) => tauriInvoke('stop_and_process_streaming', { prompt });
+export const stopAndProcessStreaming = (prompt: string) => tauriInvoke('stop_and_process_streaming', { prompt });
 export const processTextStreaming = (prompt: string) => tauriInvoke('process_text_streaming', { prompt });
 export const endSession = (): Promise<SessionSummary> => tauriInvoke('end_session');
 export const listModes = (): Promise<ModeFileInfo[]> => tauriInvoke('get_list_modes');

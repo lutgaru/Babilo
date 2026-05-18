@@ -11,7 +11,7 @@ import {
   AIState, BabiloAnalysis, SessionInfo,
   SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
-import { endSession, startListening, stopAndProcess2, processTextStreaming } from '../invoke';
+import { endSession, startListening, stopAndProcessStreaming, processTextStreaming } from '../invoke';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
@@ -145,7 +145,7 @@ export class BblSession extends LitElement {
       this._setupStreamListener();
 
       try {
-        await stopAndProcess2('');
+        await stopAndProcessStreaming('');
       } catch (err) {
         console.error('Error procesando audio:', err);
         this.aiState = 'idle';
