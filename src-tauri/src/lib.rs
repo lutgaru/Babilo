@@ -35,12 +35,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::greet,
-            commands::synthesize,
             commands::list_voices,
             commands::list_audio_devices,
             commands::start_listening,
             commands::stop_and_process_streaming,
-            commands::test_inference,
             commands::reset_conversation,
             commands::get_context_usage,
             commands::start_session,

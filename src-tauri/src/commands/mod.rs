@@ -184,24 +184,6 @@ pub async fn process_text_streaming(
 // ─── TTS ─────────────────────────────────────────────────────
 
 #[tauri::command]
-pub fn synthesize(
-    text: String,
-    voice: Option<String>,
-    state: State<'_, AppState>,
-) -> Result<Vec<i8>, String> {
-    let voice_id = voice.unwrap_or_else(|| "F1".to_string());
-    let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
-    let mut tts = manager.tts_engine.lock().map_err(|e| e.to_string())?;
-
-    match tts.as_mut() {
-        None => Err("TTS engine not initialized".into()),
-        Some(engine) => engine
-            .speak(&text, &voice_id, "en", 1.0, 30)
-            .map_err(|e| e.to_string()),
-    }
-}
-
-#[tauri::command]
 pub fn list_voices(state: State<'_, AppState>) -> Result<Vec<String>, String> {
     let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
     let tts = manager.tts_engine.lock().map_err(|e| e.to_string())?;
@@ -209,24 +191,6 @@ pub fn list_voices(state: State<'_, AppState>) -> Result<Vec<String>, String> {
 }
 
 // ─── LLM / Debug ─────────────────────────────────────────────
-
-#[tauri::command]
-pub async fn test_inference(
-    test_prompt: String,
-    state: State<'_, AppState>,
-) -> Result<String, String> {
-    let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
-    let mut llm = manager.llm_engine.lock().map_err(|e| e.to_string())?;
-
-    if let Some(ref mut model) = *llm {
-        if model.model().context_is_full(model.state().n_past, 256) {
-            let _ = model.reset();
-        }
-        model.infer_text(&test_prompt).map_err(|e| e.to_string())
-    } else {
-        Ok("No LLM model available".into())
-    }
-}
 
 #[tauri::command]
 pub fn reset_conversation(state: State<'_, AppState>) -> Result<bool, String> {
