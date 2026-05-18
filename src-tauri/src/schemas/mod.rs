@@ -53,7 +53,7 @@ First, reply conversationally in 1-2 sentences naturally.
 Then output exactly: <|babilo_analysis|>
 Then output a JSON object:
 {
-  "transcription": "<exact transcription>",
+  "transcription": "<exact transcription>(audio or text input that the user just said or wrote, if applicable. Otherwise, empty string)",
   "corrections": [{"original": "...", "fixed": "...", "reason": "..."}],
   "score": <0-100>,
   "next_step_hint": "<hint or null>"
