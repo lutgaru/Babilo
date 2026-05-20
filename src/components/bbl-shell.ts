@@ -6,19 +6,66 @@
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
 import { state } from 'lit/decorators.js';
+import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { AppView, SessionInfo, SessionSummary } from '../types/babilo';
 import './bbl-config-list';
 import './bbl-session';
+import './bbl-splash'; // Import new Splash component
 
 export class BblShell extends LitElement {
   @state() private view: AppView = 'config-list';
   @state() private sessionInfo: SessionInfo | null = null;
 
+  // Core startup control states
+  @state() private coreReady = false;
+  @state() private coreError = '';
+  @state() private splashMessage = 'Synchronizing Vulkan environments...';
+
+  private unlistenReady: UnlistenFn | null = null;
+  private unlistenError: UnlistenFn | null = null;
+
   static styles = css`:host { display: block; }`;
 
-  connectedCallback() {
+  async connectedCallback() {
     super.connectedCallback();
     if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
+
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
+
+    if (isTauri) {
+      // REAL WORLD (TAURI + RUST BACKGROUND THREAD)
+      try {
+        this.unlistenReady = await listen('babilo://core-ready', () => {
+          console.log('[Babilo Shell] Rust initialized successfully.');
+          this.coreReady = true;
+        });
+
+        this.unlistenError = await listen<string>('babilo://core-error', (event) => {
+          console.error('[Babilo Shell] Fatal error reported by backend:', event.payload);
+          this.coreError = event.payload;
+        });
+      } catch (err) {
+        this.coreError = `Error registering native listeners: ${err}`;
+      }
+    } else {
+      // MOCK WORLD (Pure Browser for fast Dev)
+      console.log('[Babilo Shell Mock] Simulating Gemma weight loading (2s)...');
+
+      setTimeout(() => {
+        this.splashMessage = 'Instantiating network weights in VRAM...';
+      }, 1000);
+
+      setTimeout(() => {
+        console.log('[Babilo Shell Mock] Emulation completed.');
+        this.coreReady = true;
+      }, 2200);
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.unlistenReady) this.unlistenReady();
+    if (this.unlistenError) this.unlistenError();
   }
 
   private onSessionStarted(e: CustomEvent<SessionInfo>) {
@@ -32,6 +79,17 @@ export class BblShell extends LitElement {
   }
 
   render() {
+    // 1. If heavy engines are not ready or failed, force Splashscreen
+    if (!this.coreReady) {
+      return html`
+        <bbl-splash 
+          .message=${this.splashMessage} 
+          .errorMessage=${this.coreError}>
+        </bbl-splash>
+      `;
+    }
+
+    // 2. Normal screen flow once app is loaded
     if (this.view === 'session' && this.sessionInfo) {
       return html`
         <bbl-session

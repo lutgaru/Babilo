@@ -8,12 +8,12 @@
  * (at your option) any later version.
  */
 
-//! Biblioteca principal - solo configuración y setup de Tauri
+//! Main library - Tauri configuration and setup only
 
 use crate::{session::SessionManager, state::AppState};
-use tauri::{Builder, Manager};
+use tauri::{Builder, Emitter, Manager};
 
-// Módulos
+// Modules
 pub mod audio;
 pub mod commands;
 pub mod config;
@@ -26,7 +26,7 @@ pub mod state;
 pub mod tts;
 pub mod utils;
 
-// Re-export de commands para el macro
+// Re-export commands for the macro
 pub use commands::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -47,49 +47,10 @@ pub fn run() {
             commands::process_text_streaming
         ])
         .setup(|app| {
-            // Inicializar logging
+            // 1. Ultra-lightweight and instant initializations first
             utils::init_logging();
 
-            // Rutas a modelos
-            let models_dir = utils::models_dir();
-            let model_path = models_dir.join("gemma-4-E4B-it-Q4_0.gguf");
-            let mmproj_path = models_dir.join("mmproj-BF16.gguf");
-
-            // Inicializar LLM
-            let llm_engine = if model_path.exists() {
-                let mmproj = if mmproj_path.exists() {
-                    eprintln!("✅ mmproj found, enabling multimodal support");
-                    Some(mmproj_path.as_path())
-                } else {
-                    eprintln!("⚠️ mmproj not found, text-only mode");
-                    None
-                };
-
-                match llama::LlmModel::new(&model_path, mmproj, config::LlmConfig::default()) {
-                    Ok(model) => Some(llama::InferenceEngine::new(model)),
-                    Err(e) => {
-                        eprintln!("❌ Failed to load LLM: {}", e);
-                        None
-                    }
-                }
-            } else {
-                eprintln!("❌ Model file not found: {:?}", model_path);
-                None
-            };
-
-            // Inicializar TTS
-            let tts_engine = match tts::TtsEngine::new(tts::assets_dir(), app.handle().clone()) {
-                Ok(e) => {
-                    eprintln!("✅ TTS Engine initialized");
-                    Some(e)
-                }
-                Err(e) => {
-                    eprintln!("❌ TTS init error: {}", e);
-                    None
-                }
-            };
-
-            // Configurar estado global
+            // Set up global state with empty/initial containers
             app.manage(AppState {
                 config: config::AppConfig::default(),
                 audio_capture: std::sync::Mutex::new(None),
@@ -102,17 +63,70 @@ pub fn run() {
                 session_manager: std::sync::Arc::new(std::sync::Mutex::new(SessionManager::new())),
             });
 
-            //load engines into session manager
-            {
-                let state = app.state::<AppState>();
-                let mut manager = state.session_manager.lock().unwrap();
-                manager.load_engines(llm_engine, tts_engine);
-            }
-            // Mostrar ventana principal
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-            }
+            // Clone app_handle to move safely between threads
+            let app_handle = app.handle().clone();
 
+            // 2. SPARK THE ASYNC THREAD: Heavy lifting happens down here
+            tauri::async_runtime::spawn(async move {
+                // Model paths
+                let models_dir = utils::models_dir();
+                let model_path = models_dir.join("gemma-4-E4B-it-Q4_0.gguf");
+                let mmproj_path = models_dir.join("mmproj-BF16.gguf");
+
+                // Initialize LLM
+                let llm_engine = if model_path.exists() {
+                    let mmproj = if mmproj_path.exists() {
+                        eprintln!("✅ mmproj found, enabling multimodal support");
+                        Some(mmproj_path.as_path())
+                    } else {
+                        eprintln!("⚠️ mmproj not found, text-only mode");
+                        None
+                    };
+
+                    match llama::LlmModel::new(&model_path, mmproj, config::LlmConfig::default()) {
+                        Ok(model) => Some(llama::InferenceEngine::new(model)),
+                        Err(e) => {
+                            eprintln!("❌ Failed to load LLM: {}", e);
+                            let _ = app_handle
+                                .emit("babilo://core-error", format!("Failed to load LLM: {}", e));
+                            None
+                        }
+                    }
+                } else {
+                    eprintln!("❌ Model file not found: {:?}", model_path);
+                    let _ = app_handle.emit(
+                        "babilo://core-error",
+                        "Gemma model file not found".to_string(),
+                    );
+                    None
+                };
+
+                // Initialize TTS
+                let tts_engine = match tts::TtsEngine::new(tts::assets_dir(), app_handle.clone()) {
+                    Ok(e) => {
+                        eprintln!("✅ TTS Engine initialized");
+                        Some(e)
+                    }
+                    Err(e) => {
+                        eprintln!("❌ TTS init error: {}", e);
+                        let _ = app_handle
+                            .emit("babilo://core-error", format!("TTS init error: {}", e));
+                        None
+                    }
+                };
+
+                // Inject engines into global State Manager once ready
+                {
+                    let state = app_handle.state::<AppState>();
+                    let mut manager = state.session_manager.lock().unwrap();
+                    manager.load_engines(llm_engine, tts_engine);
+                }
+
+                // 3. READY! Notify the frontend (Lit) to unmount the Splash
+                let _ = app_handle.emit("babilo://core-ready", ());
+            });
+
+            // Return OK immediately. Window opens rendering initial HTML.
             Ok(())
         })
         .run(tauri::generate_context!())
