@@ -5,7 +5,8 @@
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { AudioDevice, ModeFileInfo, SessionInfo, SessionSummary } from './types/babilo';
-import * as mocks from './mocks/babiloMocks'; // <--- Importamos todos los mocks
+import * as mocks from './mocks/babiloMocks'; 
+import { simulateRustStream } from './mocks/babiloMocks';
 
 const isTauri = (): boolean => !!(window as any).__TAURI_INTERNALS__;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -24,8 +25,7 @@ export const startListening = async (deviceName: string | null): Promise<void> =
 
 export const stopAndProcessStreaming = async (prompt: string): Promise<any> => {
   if (isTauri()) return tauriInvoke('stop_and_process_streaming', { prompt });
-  console.log(`[Babilo Mock] stopAndProcessStreaming con prompt: "${prompt}"`);
-  await delay(1200);
+  simulateRustStream(prompt);
   return { success: true };
 };
 

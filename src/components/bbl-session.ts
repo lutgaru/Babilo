@@ -60,24 +60,39 @@ export class BblSession extends LitElement {
   }
 
   // ── Stream listener management (DRY) ──
-  private _setupStreamListener() {
-    // Clean up any existing listener first
-    this._cleanupStreamListener();
+private _setupStreamListener() {
+  this._cleanupStreamListener();
 
+  const isTauri = !!(window as any).__TAURI_INTERNALS__;
+
+  const processEvent = (event: StreamEvent) => {
+    this.handleStreamEvent(event);
+
+  };
+
+  if (isTauri) {
     listen('babilo://stream', ({ payload }) => {
-      const event = payload as StreamEvent;
-      this.handleStreamEvent(event);
-
-      // Auto-unsubscribe on terminal events
-      if (event.type === 'analysis' || event.type === 'error') {
-        this._cleanupStreamListener();
-      }
+      processEvent(payload as StreamEvent);
     }).then(unlistenFn => {
       this._unlistenStream = unlistenFn;
     }).catch(err => {
-      console.error('Error setting up stream listener:', err);
+      console.error('Error setting up native stream listener:', err);
     });
+  } else {
+    const mockHandler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail?.payload) {
+        processEvent(customEvent.detail.payload as StreamEvent);
+      }
+    };
+
+    window.addEventListener('babilo://stream', mockHandler);
+    
+    this._unlistenStream = () => {
+      window.removeEventListener('babilo://stream', mockHandler);
+    };
   }
+}
 
   private _cleanupStreamListener() {
     if (this._unlistenStream) {
