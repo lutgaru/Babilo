@@ -12,25 +12,42 @@ export class BblSplash extends LitElement {
     @property({ type: String }) errorMessage = '';
 
     static styles = css`
-    :host {
-      display: block;
-    }
-    .spinner-arc {
-      border: 3px solid rgba(255, 255, 255, 0.08);
-      border-top-color: #3b82f6; /* Loading blue */
-      animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    }
-    .brand-glow {
-      animation: pulse-glow 2s infinite ease-in-out;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    @keyframes pulse-glow {
-      0%, 100% { opacity: 0.6; transform: scale(0.98); }
-      50% { opacity: 1; transform: scale(1.02); }
-    }
-  `;
+  :host {
+    display: block;
+  }
+  .loading-bar-track {
+    width: 100%;
+    height: 3px;
+    border-radius: 999px;
+    background: var(--bbl-border);
+    overflow: hidden;
+    position: relative;
+  }
+  .loading-bar-fill {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: linear-gradient(
+      90deg,
+      var(--bbl-accent2) 0%,
+      var(--bbl-accent) 50%,
+      var(--bbl-accent2) 100%
+    );
+    background-size: 200% auto;
+    animation: shimmer 4s linear infinite;
+  }
+  .brand-glow {
+    animation: pulse-glow 2s infinite ease-in-out;
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.6; transform: scale(0.98); }
+    50%       { opacity: 1;   transform: scale(1.02); }
+  }
+`;
 
     connectedCallback() {
         super.connectedCallback();
@@ -41,7 +58,7 @@ export class BblSplash extends LitElement {
         return html`
       <div class="fixed inset-0 bg-[#111216] text-slate-200 flex flex-col items-center justify-center font-sans select-none">
         
-        <div class="brand-glow flex flex-col items-center mb-12">
+        <div class=" flex flex-col items-center mb-12">
           <div class="text-5xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-indigo-400">
             BABILO
           </div>
@@ -61,7 +78,9 @@ export class BblSplash extends LitElement {
                 </div>
               `
                 : html`
-                <div class="spinner-arc w-8 h-8 rounded-full mb-4"></div>
+                <div class="loading-bar-track w-64 mb-4">
+                    <div class="loading-bar-fill"></div>
+                </div>
                 <div class="text-sm font-medium text-slate-400 font-mono tracking-wide">
                   ${this.message}
                 </div>
