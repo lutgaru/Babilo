@@ -16,6 +16,7 @@ import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
 import './bbl-mic-panel';
+import './bbl-transcript';
 
 export class BblSession extends LitElement {
   // ── Props desde el router ──
@@ -31,6 +32,9 @@ export class BblSession extends LitElement {
   @state() nextStepHint: string | null = null;
   @state() messages: TranscriptMessage[] = [];
   @state() response = '';
+
+  /** Controls the side-panel visibility; open by default */
+  @state() transcriptOpen = true;
 
   private _timerInterval: ReturnType<typeof setInterval> | null = null;
   private _unlistenStream: UnlistenFn | null = null;
@@ -60,39 +64,39 @@ export class BblSession extends LitElement {
   }
 
   // ── Stream listener management (DRY) ──
-private _setupStreamListener() {
-  this._cleanupStreamListener();
+  private _setupStreamListener() {
+    this._cleanupStreamListener();
 
-  const isTauri = !!(window as any).__TAURI_INTERNALS__;
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
-  const processEvent = (event: StreamEvent) => {
-    this.handleStreamEvent(event);
+    const processEvent = (event: StreamEvent) => {
+      this.handleStreamEvent(event);
 
-  };
-
-  if (isTauri) {
-    listen('babilo://stream', ({ payload }) => {
-      processEvent(payload as StreamEvent);
-    }).then(unlistenFn => {
-      this._unlistenStream = unlistenFn;
-    }).catch(err => {
-      console.error('Error setting up native stream listener:', err);
-    });
-  } else {
-    const mockHandler = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      if (customEvent.detail?.payload) {
-        processEvent(customEvent.detail.payload as StreamEvent);
-      }
     };
 
-    window.addEventListener('babilo://stream', mockHandler);
+    if (isTauri) {
+      listen('babilo://stream', ({ payload }) => {
+        processEvent(payload as StreamEvent);
+      }).then(unlistenFn => {
+        this._unlistenStream = unlistenFn;
+      }).catch(err => {
+        console.error('Error setting up native stream listener:', err);
+      });
+    } else {
+      const mockHandler = (e: Event) => {
+        const customEvent = e as CustomEvent;
+        if (customEvent.detail?.payload) {
+          processEvent(customEvent.detail.payload as StreamEvent);
+        }
+      };
+
+      window.addEventListener('babilo://stream', mockHandler);
     
-    this._unlistenStream = () => {
-      window.removeEventListener('babilo://stream', mockHandler);
-    };
+      this._unlistenStream = () => {
+        window.removeEventListener('babilo://stream', mockHandler);
+      };
+    }
   }
-}
 
   private _cleanupStreamListener() {
     if (this._unlistenStream) {
@@ -113,7 +117,7 @@ private _setupStreamListener() {
     this.timerSecs = 0;
   }
 
-  // ── Colgar ──
+  // ── Hang up ──
   private async hangUp() {
     this._cleanupStreamListener();
     this.stopTimer();
@@ -210,6 +214,68 @@ private _setupStreamListener() {
     }
   }
 
+  // ── Side panel ──
+  private _renderSidePanel() {
+    return html`
+      <!--
+        Outer shell drives the push: width transitions 0 ↔ its natural size.
+        overflow-hidden clips the inner content while animating.
+        transition-[width,opacity] with a cubic-bezier gives a snappy feel.
+      -->
+      <div
+        aria-hidden="${!this.transcriptOpen}"
+        class="
+          flex-shrink-0 flex flex-col min-h-0 overflow-hidden
+          border-l-[0.5px] border-[var(--bbl-border)]
+          bg-[var(--bbl-surface)]
+          transition-[width,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]
+          ${this.transcriptOpen
+        ? 'w-[min(420px,40vw)] opacity-100'
+        : 'w-0 opacity-0 pointer-events-none border-l-0'}
+        ">
+
+        <!-- Header -->
+        <div class="
+          flex items-center justify-between
+          px-4 py-3
+          border-b-[0.5px] border-[var(--bbl-border)]
+          flex-shrink-0">
+          <span class="
+            text-[11px] font-semibold tracking-[0.08em] uppercase
+            text-[var(--bbl-text-faint)]">
+            Transcript
+          </span>
+          <button
+            title="Close panel"
+            aria-label="Close panel"
+            @click=${() => { this.transcriptOpen = false; }}
+            class="
+              flex items-center justify-center w-7 h-7 rounded-md
+              text-[var(--bbl-text-muted)]
+              hover:bg-[var(--bbl-btn-hover)] hover:text-[var(--bbl-text)]
+              transition-[background,color] duration-150
+              cursor-pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                 aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <bbl-transcript
+            .messages=${this.messages}
+            class="w-full h-full">
+          </bbl-transcript>
+        </div>
+
+      </div>
+    `;
+  }
+
   // ── Input zone based on caps ──
   private renderInputZone() {
     const { accepts_audio, accepts_text } = this.sessionInfo.caps;
@@ -252,7 +318,9 @@ private _setupStreamListener() {
     return html`
       <bbl-controls
         ?recording=${this.recording}
+        .transcriptOpen=${this.transcriptOpen}
         @mic-toggle=${this.toggleRecording}
+        @transcript-toggle=${() => { this.transcriptOpen = !this.transcriptOpen; }}
         class="flex-shrink-0">
         <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
       </bbl-controls>
@@ -276,17 +344,26 @@ private _setupStreamListener() {
           @hang-up=${this.hangUp}>
         </bbl-top-bar>
 
-        <!-- Main content -->
-        <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <bbl-stage
-            .aiState=${this.aiState}
-            .response=${this.response}
-            .messages=${this.messages}
-            class="h-full">
-          </bbl-stage>
-        </main>
+        <!--
+          session-body: flex-row so bbl-stage and the side panel
+          sit side by side. bbl-stage takes flex-1 and shrinks naturally
+          as the panel opens.
+        -->
+        <div class="flex-1 flex flex-row min-h-0 overflow-hidden">
 
-        <!-- Input zone — changes based on mode caps -->
+          <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <bbl-stage
+              .aiState=${this.aiState}
+              .response=${this.response}
+              class="h-full">
+            </bbl-stage>
+          </main>
+
+          <!-- Side panel pushes bbl-stage left as it opens -->
+          ${this._renderSidePanel()}
+
+        </div>
+
         ${this.renderInputZone()}
 
       </div>

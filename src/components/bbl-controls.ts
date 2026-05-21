@@ -8,16 +8,13 @@ import { property } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
 export class BblControls extends LitElement {
-  // ── Reactive Property (passed from parent) ──
-  @property({ type: Boolean })
-  recording = false;
+  @property({ type: Boolean }) recording = false;
+
+  /** Mirrors the transcript panel state — drives the icon's active style */
+  @property({ type: Boolean }) transcriptOpen = true;
 
   static styles = css`
-    :host {
-      display: block;
-    }
-
-    /* ── Only what Tailwind can't express ── */
+    :host { display: block; }
 
     @keyframes mic-pulse {
       0%, 100% { box-shadow: 0 0 0 4px var(--bbl-accent-ring); }
@@ -28,24 +25,23 @@ export class BblControls extends LitElement {
       animation: mic-pulse 2s ease-in-out infinite;
     }
 
-    /* focus-within can't target shadow input from outside */
     input:focus { border-color: var(--bbl-accent2); }
     input::placeholder { color: var(--bbl-text-faint); }
   `;
 
   connectedCallback() {
     super.connectedCallback();
-    if (this.shadowRoot) {
-      applyTailwindToShadowRoot(this.shadowRoot);
-    }
+    if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
   }
 
-  // ── Event Handlers ──
   private _onMicClick() {
     this.dispatchEvent(new CustomEvent('mic-toggle', { bubbles: true, composed: true }));
   }
 
-  // ── Render ──
+  private _onTranscriptToggle() {
+    this.dispatchEvent(new CustomEvent('transcript-toggle', { bubbles: true, composed: true }));
+  }
+
   render() {
     return html`
       <footer class="
@@ -124,23 +120,33 @@ export class BblControls extends LitElement {
             </svg>
           </button>
 
-          <!-- Settings button -->
+          <!-- Transcript toggle button (was: settings) -->
           <button
-            title="Configuración"
+            title="${this.transcriptOpen ? 'Hide transcript' : 'Show transcript'}"
+            aria-label="${this.transcriptOpen ? 'Hide transcript panel' : 'Show transcript panel'}"
+            aria-pressed="${this.transcriptOpen}"
+            @click=${this._onTranscriptToggle}
             class="
               w-12 h-12 rounded-full
-              bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
+              border-[0.5px]
               flex items-center justify-center
-              text-[var(--bbl-text-muted)]
-              transition-[background,color] duration-150
-              hover:bg-[var(--bbl-btn-hover)] hover:text-[var(--bbl-text)]
-              active:bg-[var(--bbl-btn-active)] active:scale-[0.94]
+              transition-[background,color,border-color] duration-150
+              active:scale-[0.94]
+              ${this.transcriptOpen
+        ? 'bg-[var(--bbl-accent2)] border-[var(--bbl-accent2)] text-white'
+        : 'bg-[var(--bbl-btn-bg)] border-[var(--bbl-border)] text-[var(--bbl-text-muted)] hover:bg-[var(--bbl-btn-hover)] hover:text-[var(--bbl-text)]'}
             ">
+            <!--
+              Panel/sidebar icon: a rectangle split into a narrow left strip
+              and a wider right area, representing a side panel layout.
+            -->
             <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none"
-                 stroke="currentColor" stroke-width="1.6">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-                    stroke-linecap="round"/>
+                 stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                 stroke-linejoin="round" aria-hidden="true">
+              <!-- outer frame -->
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <!-- vertical divider — right panel -->
+              <line x1="15" y1="3" x2="15" y2="21"/>
             </svg>
           </button>
 

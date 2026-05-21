@@ -6,18 +6,14 @@
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
-import type { AIState, TranscriptMessage } from '../types/babilo';
+import type { AIState } from '../types/babilo';
 
-import './bbl-transcript';
 import './bbl-waveform';
-import './bbl-avatar'; // ← Nuevo import
+import './bbl-avatar';
 
 export class BblStage extends LitElement {
   @property({ type: String })
   aiState: AIState = 'idle';
-
-  @property({ type: Array })
-  messages: Array<TranscriptMessage> = [];
 
   static styles = css`
     :host {
@@ -31,7 +27,6 @@ export class BblStage extends LitElement {
       overflow: hidden;
     }
 
-    /* ── Responsive ── */
     @media (max-height: 600px) {
       :host { gap: 14px; padding: 18px 20px; }
     }
@@ -39,9 +34,7 @@ export class BblStage extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    if (this.shadowRoot) {
-      applyTailwindToShadowRoot(this.shadowRoot);
-    }
+    if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
   }
 
   render() {
@@ -50,32 +43,22 @@ export class BblStage extends LitElement {
       listening: 'Listening...',
       processing: 'Processing...',
       speaking: 'Speaking...',
-      thinking: 'Thinking...'
+      thinking: 'Thinking...',
     };
 
     return html`
-    <div class="grid grid-cols-2 gap-6 w-full h-full items-start justify-center">
-      
-      <div class="flex flex-col items-center gap-4 py-4 flex-shrink-0">
+      <div class="flex flex-col items-center gap-4 py-4">
         <bbl-avatar .state=${this.aiState}></bbl-avatar>
         <div class="flex flex-col items-center gap-0.5">
-          <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">Assistant</span>
+          <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">
+            Assistant
+          </span>
           <span class="text-[15px] font-medium text-[var(--bbl-text)] min-h-[22px] text-center">
             ${STATE_LABELS[this.aiState]}
           </span>
         </div>
         <bbl-waveform .state=${this.aiState}></bbl-waveform>
       </div>
-
-      <div class="flex flex-col min-h-0 h-full">
-        <bbl-transcript 
-          id="chat" 
-          .messages=${this.messages}
-          class="w-full h-full">
-        </bbl-transcript>
-      </div>
-      
-    </div>
     `;
   }
 }
