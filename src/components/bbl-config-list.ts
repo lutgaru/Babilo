@@ -5,13 +5,15 @@
 
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
-import { state } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
+import { state, customElement } from 'lit/decorators.js';
 import { ModeFileInfo, SessionInfo } from '../types/babilo';
 import { listModes, startSession } from '../invoke';
 
 // Directory where .babilo.json files live — adjust according to your Tauri structure
 
-export class BblConfigList extends LitElement {
+@customElement('bbl-config-list')
+export class BblConfigList extends withI18n(LitElement) {
   @state() private modes: ModeFileInfo[] = [];
   @state() private loading = true;
   @state() private starting: string | null = null; // path of mode being started
@@ -52,18 +54,18 @@ export class BblConfigList extends LitElement {
     }
   }
 
-  private capIcons(mode: ModeFileInfo) {
+  private _renderCapIcons(mode: ModeFileInfo) {
     const icons = [];
-    if (mode.caps.accepts_audio) icons.push(html`<span title="Audio">🎙</span>`);
-    if (mode.caps.accepts_text)  icons.push(html`<span title="Texto">⌨️</span>`);
-    if (mode.caps.llm_initiates) icons.push(html`<span title="IA habla primero">🤖</span>`);
+    if (mode.caps.accepts_audio) icons.push(html`<span title="${this._t('config.cap.audio')}">🎙</span>`);
+    if (mode.caps.accepts_text) icons.push(html`<span title="${this._t('config.cap.text')}">⌨️</span>`);
+    if (mode.caps.llm_initiates) icons.push(html`<span title="${this._t('config.cap.llm_first')}">🤖</span>`);
     return icons;
   }
 
   render() {
     if (this.loading) return html`
       <div class="flex items-center justify-center h-screen bg-[var(--bbl-bg)]">
-        <p class="text-[var(--bbl-muted)] text-sm">Loading modes...</p>
+        <p class="text-[var(--bbl-muted)] text-sm">${this._t('common.loading')}</p>
       </div>
     `;
 
@@ -72,14 +74,14 @@ export class BblConfigList extends LitElement {
 
         <!-- Header -->
         <header class="px-6 pt-8 pb-4">
-          <h1 class="text-2xl font-semibold text-[var(--bbl-text)]">Babilo</h1>
-          <p class="text-sm text-[var(--bbl-muted)] mt-1">Choose a mode to practice</p>
+          <h1 class="text-2xl font-semibold text-[var(--bbl-text)]">${this._t('config.title')}</h1>
+          <p class="text-sm text-[var(--bbl-muted)] mt-1">${this._t('config.subtitle')}</p>
         </header>
 
         <!-- Error -->
         ${this.error ? html`
           <div class="mx-6 mb-4 px-4 py-3 rounded-lg bg-red-500/10 text-red-400 text-sm">
-            Error: ${this.error}
+            ${this._t('common.error')}: ${this.error}
           </div>
         ` : ''}
 
@@ -87,7 +89,7 @@ export class BblConfigList extends LitElement {
         <ul class="flex-1 overflow-y-auto px-6 space-y-3 pb-8">
           ${this.modes.length === 0 ? html`
             <li class="text-[var(--bbl-muted)] text-sm py-8 text-center">
-              No modes available
+              ${this._t('config.no_modes')}
             </li>
           ` : this.modes.map(mode => html`
             <li>
@@ -104,7 +106,9 @@ export class BblConfigList extends LitElement {
                 <!-- Icono de modo -->
                 <div class="w-12 h-12 rounded-xl bg-[var(--bbl-accent)]/10
                             flex items-center justify-center text-2xl flex-shrink-0">
-                  ${mode.caps.llm_initiates ? '🎧' : '💬'}
+                  ${mode.caps.llm_initiates
+        ? html`<span title="${this._t('config.cap.llm_first')}">🎧</span>`
+        : html`<span title="${this._t('config.cap.text')}">💬</span>`}
                 </div>
 
                 <!-- Info -->
@@ -114,7 +118,7 @@ export class BblConfigList extends LitElement {
                       ${mode.name}
                     </span>
                     <span class="flex gap-1 text-xs opacity-60">
-                      ${this.capIcons(mode)}
+                      ${this._renderCapIcons(mode)}
                     </span>
                   </div>
                   ${mode.description ? html`
@@ -127,9 +131,9 @@ export class BblConfigList extends LitElement {
                 <!-- Estado -->
                 <div class="flex-shrink-0 text-[var(--bbl-muted)]">
                   ${this.starting === mode.path
-                    ? html`<span class="text-xs animate-pulse">Starting...</span>`
-                    : html`<span class="text-lg">›</span>`
-                  }
+        ? html`<span class="text-xs animate-pulse">${this._t('config.starting')}</span>`
+        : html`<span class="text-lg">›</span>`
+      }
                 </div>
               </button>
             </li>
@@ -140,5 +144,3 @@ export class BblConfigList extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-config-list', BblConfigList);

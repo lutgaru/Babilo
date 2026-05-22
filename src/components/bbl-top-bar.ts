@@ -5,10 +5,11 @@
 
 import { LitElement, html, css } from 'lit';
 import { property, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
 @customElement('bbl-top-bar')
-export class BblTopBar extends LitElement {
+export class BblTopBar extends withI18n(LitElement) {
 
   @property({ type: String })
   status = 'Ready';
@@ -58,7 +59,7 @@ export class BblTopBar extends LitElement {
         <div class="flex items-center gap-2 min-w-0">
           ${this.active
         ? html`<span class="w-2 h-2 rounded-full bg-red-500 animate-pulse flex-shrink-0" 
-                         title="Sesión activa"></span>`
+                         title="${this._t('topbar.active_session')}"></span>`
         : html`<span class="w-2 h-2 rounded-full bg-[var(--bbl-muted)] flex-shrink-0"></span>`
       }
           <span class="text-sm font-medium text-[var(--bbl-text)] truncate">
@@ -88,7 +89,7 @@ export class BblTopBar extends LitElement {
               class="w-8 h-8 rounded-full bg-red-500/10 hover:bg-red-500 
                      text-red-400 hover:text-white transition-all duration-150 
                      flex items-center justify-center text-sm"
-              title="Terminar sesión">
+              title="${this._t('topbar.end_session')}">
               ✕
             </button>
           `

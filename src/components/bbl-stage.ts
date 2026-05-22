@@ -4,14 +4,16 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { property } from 'lit/decorators.js';
+import { property, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import type { AIState } from '../types/babilo';
 
 import './bbl-waveform';
 import './bbl-avatar';
 
-export class BblStage extends LitElement {
+@customElement('bbl-stage')
+export class BblStage extends withI18n(LitElement) {
   @property({ type: String })
   aiState: AIState = 'idle';
 
@@ -26,7 +28,6 @@ export class BblStage extends LitElement {
       flex: 1;
       overflow: hidden;
     }
-
     @media (max-height: 600px) {
       :host { gap: 14px; padding: 18px 20px; }
     }
@@ -38,23 +39,15 @@ export class BblStage extends LitElement {
   }
 
   render() {
-    const STATE_LABELS: Record<AIState, string> = {
-      idle: 'Waiting...',
-      listening: 'Listening...',
-      processing: 'Processing...',
-      speaking: 'Speaking...',
-      thinking: 'Thinking...',
-    };
-
     return html`
       <div class="flex flex-col items-center gap-4 py-4">
         <bbl-avatar .state=${this.aiState}></bbl-avatar>
         <div class="flex flex-col items-center gap-0.5">
           <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">
-            Assistant
+            ${this._t('common.assistant')}
           </span>
           <span class="text-[15px] font-medium text-[var(--bbl-text)] min-h-[22px] text-center">
-            ${STATE_LABELS[this.aiState]}
+            ${this._t(`state.${this.aiState}` as any)}
           </span>
         </div>
         <bbl-waveform .state=${this.aiState}></bbl-waveform>
@@ -62,5 +55,3 @@ export class BblStage extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-stage', BblStage);

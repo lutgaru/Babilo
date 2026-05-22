@@ -4,12 +4,14 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { state } from 'lit/decorators.js';
+import { state, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { listAudioDevices } from '../invoke';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { AudioDevice } from '../types/babilo';
 
-export class BblMicPanel extends LitElement {
+@customElement('bbl-mic-panel')
+export class BblMicPanel extends withI18n(LitElement) {
   // ── Reactive State Properties ──
   @state() private devices: AudioDevice[] = [];
   @state() private selected = '';
@@ -70,7 +72,7 @@ export class BblMicPanel extends LitElement {
             <path d="M2 7v1a6 6 0 0 0 12 0V7" stroke-linecap="round"/>
             <path d="M8 14v2M6 16h4" stroke-linecap="round"/>
           </svg>
-          Micro
+          ${this._t('mic.label')}
         </span>
 
         <!-- Select wrapper -->
@@ -87,7 +89,7 @@ export class BblMicPanel extends LitElement {
             "
             .value=${this.selected}
             @change=${this._onDeviceChange}>
-            <option value="">Default</option>
+            <option value="">${this._t('common.default')}</option>
             ${this.devices.map((d) => html`
               <option value=${d.name}>${d.name}</option>
             `)}
@@ -103,7 +105,7 @@ export class BblMicPanel extends LitElement {
 
         <!-- Refresh button -->
         <button
-          title="Refrescar"
+          title="${this._t('mic.refresh')}"
           class="
             w-8 h-8 flex-shrink-0
             rounded-[var(--bbl-radius-sm)]
@@ -126,5 +128,3 @@ export class BblMicPanel extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-mic-panel', BblMicPanel);

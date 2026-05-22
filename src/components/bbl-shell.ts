@@ -5,14 +5,16 @@
 
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
-import { state } from 'lit/decorators.js';
+import { state, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { AppView, SessionInfo, SessionSummary } from '../types/babilo';
 import './bbl-config-list';
 import './bbl-session';
-import './bbl-splash'; // Import new Splash component
+import './bbl-splash';
 
-export class BblShell extends LitElement {
+@customElement('bbl-shell')
+export class BblShell extends withI18n(LitElement) {
   @state() private view: AppView = 'config-list';
   @state() private sessionInfo: SessionInfo | null = null;
 
@@ -52,7 +54,7 @@ export class BblShell extends LitElement {
       console.log('[Babilo Shell Mock] Simulating Gemma weight loading (2s)...');
 
       setTimeout(() => {
-        this.splashMessage = 'Instantiating network weights in VRAM...';
+        this.splashMessage = this._t('splash.load_vram');
       }, 1000);
 
       setTimeout(() => {
@@ -83,7 +85,9 @@ export class BblShell extends LitElement {
     if (!this.coreReady) {
       return html`
         <bbl-splash 
-          .message=${this.splashMessage} 
+          .message=${this.splashMessage === 'Synchronizing Vulkan environments...'
+          ? this._t('splash.sync_vulkan')
+          : this.splashMessage}
           .errorMessage=${this.coreError}>
         </bbl-splash>
       `;
@@ -105,5 +109,3 @@ export class BblShell extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-shell', BblShell);

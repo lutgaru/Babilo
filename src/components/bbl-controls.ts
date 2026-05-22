@@ -4,10 +4,12 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { property } from 'lit/decorators.js';
+import { property, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 
-export class BblControls extends LitElement {
+@customElement('bbl-controls')
+export class BblControls extends withI18n(LitElement) {
   @property({ type: Boolean }) recording = false;
 
   /** Mirrors the transcript panel state — drives the icon's active style */
@@ -58,7 +60,7 @@ export class BblControls extends LitElement {
 
           <!-- Mute button -->
           <button
-            title="Silenciar"
+            title="${this._t('controls.mute')}"
             class="
               w-12 h-12 rounded-full
               bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
@@ -78,7 +80,7 @@ export class BblControls extends LitElement {
 
           <!-- Volume button -->
           <button
-            title="Volumen"
+            title="${this._t('controls.volume')}"
             class="
               w-12 h-12 rounded-full
               bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
@@ -98,7 +100,7 @@ export class BblControls extends LitElement {
 
           <!-- Main mic button -->
           <button
-            title="Grabar / Detener"
+            title="${this._t('controls.record_toggle')}"
             class="
               mic-main
               w-[68px] h-[68px] rounded-full
@@ -120,10 +122,10 @@ export class BblControls extends LitElement {
             </svg>
           </button>
 
-          <!-- Transcript toggle button (was: settings) -->
+          <!-- Transcript toggle button -->
           <button
-            title="${this.transcriptOpen ? 'Hide transcript' : 'Show transcript'}"
-            aria-label="${this.transcriptOpen ? 'Hide transcript panel' : 'Show transcript panel'}"
+            title="${this.transcriptOpen ? this._t('controls.transcript_hide') : this._t('controls.transcript_show')}"
+            aria-label="${this.transcriptOpen ? this._t('controls.transcript_panel_hide') : this._t('controls.transcript_panel_show')}"
             aria-pressed="${this.transcriptOpen}"
             @click=${this._onTranscriptToggle}
             class="
@@ -136,10 +138,6 @@ export class BblControls extends LitElement {
         ? 'bg-[var(--bbl-accent2)] border-[var(--bbl-accent2)] text-white'
         : 'bg-[var(--bbl-btn-bg)] border-[var(--bbl-border)] text-[var(--bbl-text-muted)] hover:bg-[var(--bbl-btn-hover)] hover:text-[var(--bbl-text)]'}
             ">
-            <!--
-              Panel/sidebar icon: a rectangle split into a narrow left strip
-              and a wider right area, representing a side panel layout.
-            -->
             <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
                  stroke-linejoin="round" aria-hidden="true">
@@ -152,7 +150,7 @@ export class BblControls extends LitElement {
 
           <!-- End call button -->
           <button
-            title="Colgar"
+            title="${this._t('controls.hangup')}"
             class="
               w-12 h-12 rounded-full
               bg-[var(--bbl-accent-dim)] border-[0.5px] border-[var(--bbl-accent-ring)]
@@ -176,5 +174,3 @@ export class BblControls extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-controls', BblControls);

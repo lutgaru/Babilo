@@ -5,9 +5,11 @@
 
 import { LitElement, html, css } from 'lit';
 import { property } from 'lit/decorators.js';
+import { customElement } from 'lit/decorators.js';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import type { AIState } from '../types/babilo';
 
+@customElement('bbl-waveform')
 export class BblWaveform extends LitElement {
   @property({ type: String })
   state: AIState = 'idle';
@@ -122,10 +124,8 @@ export class BblWaveform extends LitElement {
   }
 
   private _renderBar(isActiveBar: boolean) {
-    // isActiveBar: si esta barra es del centro (potencialmente activa)
-    // this._isActive: si el estado actual debe mostrar barras activas
     const shouldBeActive = isActiveBar && this._isActive;
-    
+
     return html`
       <div 
         class="bar"
@@ -135,5 +135,3 @@ export class BblWaveform extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-waveform', BblWaveform);

@@ -4,11 +4,13 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { property, query } from 'lit/decorators.js';
+import { property, query, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import type { BabiloAnalysis, Correction, TranscriptMessage } from '../types/babilo';
 
-export class BblTranscript extends LitElement {
+@customElement('bbl-transcript')
+export class BblTranscript extends withI18n(LitElement) {
   @property({ type: Array })
   messages: TranscriptMessage[] = [];
 
@@ -18,7 +20,7 @@ export class BblTranscript extends LitElement {
   @query('.container')
   private _scrollContainer?: HTMLDivElement;
 
- static styles = css`
+  static styles = css`
   :host {
     display: block;
     width: 100%;
@@ -70,14 +72,12 @@ export class BblTranscript extends LitElement {
   }
 
   private _getScoreClasses(score: number): string {
-    // Retorna clases de Tailwind según puntuación
-    if (score >= 8) return 'bg-[#22c55e] text-white';      // verde
-    if (score >= 5) return 'bg-[#f59e0b] text-white';      // ámbar
-    return 'bg-[var(--bbl-accent)] text-white';            // rojo/acento
+    if (score >= 8) return 'bg-[#22c55e] text-white';
+    if (score >= 5) return 'bg-[#f59e0b] text-white';
+    return 'bg-[var(--bbl-accent)] text-white';
   }
 
   private _renderCorrection(correction: Correction) {
-    // ✅ TODO con clases de Tailwind, sin CSS personalizado
     return html`
       <div class="
         flex items-center gap-1.5
@@ -130,7 +130,7 @@ export class BblTranscript extends LitElement {
       return html`
         <div class="flex items-center justify-center py-6 px-[18px]">
           <span class="text-[13px] italic text-[var(--bbl-text-faint)]">
-            The conversation will appear here...
+            ${this._t('transcript.empty')}
           </span>
         </div>
       `;
@@ -180,7 +180,7 @@ export class BblTranscript extends LitElement {
                   ${msg.analysis.score}/10
                 </span>
                 <span class="text-[11px] uppercase tracking-[0.1em] text-[var(--bbl-text-faint)]">
-                  Analysis
+                  ${this._t('transcript.analysis')}
                 </span>
               </div>
 
@@ -191,7 +191,7 @@ export class BblTranscript extends LitElement {
                 </div>
               ` : html`
                 <span class="text-[12px] text-[var(--bbl-text-muted)] italic">
-                  ✓ No corrections needed
+                  ${this._t('transcript.no_corrections')}
                 </span>
               `}
 
@@ -225,5 +225,3 @@ export class BblTranscript extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-transcript', BblTranscript);

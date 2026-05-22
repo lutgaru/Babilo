@@ -5,7 +5,8 @@
 
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { LitElement, html, css } from 'lit';
-import { property, state } from 'lit/decorators.js';
+import { property, state, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   AIState, BabiloAnalysis, SessionInfo,
@@ -18,7 +19,9 @@ import './bbl-controls';
 import './bbl-mic-panel';
 import './bbl-transcript';
 
-export class BblSession extends LitElement {
+
+@customElement('bbl-session')
+export class BblSession extends withI18n(LitElement) {
   // ── Props desde el router ──
   @property({ type: Object }) sessionInfo!: SessionInfo;
 
@@ -71,7 +74,6 @@ export class BblSession extends LitElement {
 
     const processEvent = (event: StreamEvent) => {
       this.handleStreamEvent(event);
-
     };
 
     if (isTauri) {
@@ -91,7 +93,7 @@ export class BblSession extends LitElement {
       };
 
       window.addEventListener('babilo://stream', mockHandler);
-    
+
       this._unlistenStream = () => {
         window.removeEventListener('babilo://stream', mockHandler);
       };
@@ -217,11 +219,6 @@ export class BblSession extends LitElement {
   // ── Side panel ──
   private _renderSidePanel() {
     return html`
-      <!--
-        Outer shell drives the push: width transitions 0 ↔ its natural size.
-        overflow-hidden clips the inner content while animating.
-        transition-[width,opacity] with a cubic-bezier gives a snappy feel.
-      -->
       <div
         aria-hidden="${!this.transcriptOpen}"
         class="
@@ -246,8 +243,8 @@ export class BblSession extends LitElement {
             Transcript
           </span>
           <button
-            title="Close panel"
-            aria-label="Close panel"
+            title="${this._t('common.close')}"
+            aria-label="${this._t('common.close')}"
             @click=${() => { this.transcriptOpen = false; }}
             class="
               flex items-center justify-center w-7 h-7 rounded-md
@@ -308,7 +305,7 @@ export class BblSession extends LitElement {
             ?disabled=${this.aiState === 'thinking' || this.aiState === 'speaking'}
             class="px-4 py-2 rounded-xl bg-[var(--bbl-accent)] text-white text-sm
                    disabled:opacity-40 transition-opacity">
-            Send
+            ${this._t('common.send')}
           </button>
         </div>
       `;
@@ -329,8 +326,8 @@ export class BblSession extends LitElement {
 
   render() {
     const statusText = this.recording ? 'Recording'
-      : this.aiState === 'idle' ? 'Ready'
-        : this.aiState;
+      : this.aiState === 'idle' ? this._t('state.idle')
+        : this._t(`state.${this.aiState}` as any);
 
     return html`
       <div class="flex flex-col h-screen bg-[var(--bbl-bg)]">
@@ -344,11 +341,7 @@ export class BblSession extends LitElement {
           @hang-up=${this.hangUp}>
         </bbl-top-bar>
 
-        <!--
-          session-body: flex-row so bbl-stage and the side panel
-          sit side by side. bbl-stage takes flex-1 and shrinks naturally
-          as the panel opens.
-        -->
+        <!-- session-body: flex-row so bbl-stage and the side panel sit side by side -->
         <div class="flex-1 flex flex-row min-h-0 overflow-hidden">
 
           <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -370,5 +363,3 @@ export class BblSession extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-session', BblSession);

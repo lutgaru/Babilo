@@ -4,11 +4,13 @@
  */
 
 import { LitElement, html, css } from 'lit';
-import { property } from 'lit/decorators.js';
+import { property, customElement } from 'lit/decorators.js';
+import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import type { AIState } from '../types/babilo';
 
-export class BblAvatar extends LitElement {
+@customElement('bbl-avatar')
+export class BblAvatar extends withI18n(LitElement) {
   @property({ type: String })
   state: AIState = 'idle';
 
@@ -120,7 +122,7 @@ export class BblAvatar extends LitElement {
       <div 
         class="relative w-40 h-40 flex items-center justify-center"
         data-pulsing=${this._isPulsing}
-        aria-label="AI Assistant avatar">
+        aria-label="${this._t('avatar.label')}">
         
         <!-- ring-c: filled innermost (siempre estático) -->
         <div class="ring ring-c"></div>
@@ -139,5 +141,3 @@ export class BblAvatar extends LitElement {
     `;
   }
 }
-
-customElements.define('bbl-avatar', BblAvatar);
