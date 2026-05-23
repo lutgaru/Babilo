@@ -25,6 +25,9 @@ export class BblSession extends withI18n(LitElement) {
   // ── Props desde el router ──
   @property({ type: Object }) sessionInfo!: SessionInfo;
 
+  /** Passed down from bbl-shell to keep the gear icon active */
+  @property({ type: Boolean }) settingsOpen = false;
+
   // ── Estado reactivo ──
   @state() aiState: AIState = 'idle';
   @state() recording = false;
@@ -43,6 +46,14 @@ export class BblSession extends withI18n(LitElement) {
   private _unlistenStream: UnlistenFn | null = null;
 
   static styles = css`:host { display: block; }`;
+
+  // Bind handlers once so Lit can add/remove the same reference
+  constructor() {
+    super();
+    this.hangUp = this.hangUp.bind(this);
+    this.toggleRecording = this.toggleRecording.bind(this);
+    this._onSettingsOpen = this._onSettingsOpen.bind(this);
+  }
 
   connectedCallback() {
     super.connectedCallback();
@@ -71,32 +82,23 @@ export class BblSession extends withI18n(LitElement) {
     this._cleanupStreamListener();
 
     const isTauri = !!(window as any).__TAURI_INTERNALS__;
-
-    const processEvent = (event: StreamEvent) => {
-      this.handleStreamEvent(event);
-    };
+    const processEvent = (event: StreamEvent) => this.handleStreamEvent(event);
 
     if (isTauri) {
       listen('babilo://stream', ({ payload }) => {
         processEvent(payload as StreamEvent);
-      }).then(unlistenFn => {
-        this._unlistenStream = unlistenFn;
+      }).then(fn => {
+        this._unlistenStream = fn;
       }).catch(err => {
         console.error('Error setting up native stream listener:', err);
       });
     } else {
       const mockHandler = (e: Event) => {
-        const customEvent = e as CustomEvent;
-        if (customEvent.detail?.payload) {
-          processEvent(customEvent.detail.payload as StreamEvent);
-        }
+        const detail = (e as CustomEvent).detail;
+        if (detail?.payload) processEvent(detail.payload as StreamEvent);
       };
-
       window.addEventListener('babilo://stream', mockHandler);
-
-      this._unlistenStream = () => {
-        window.removeEventListener('babilo://stream', mockHandler);
-      };
+      this._unlistenStream = () => window.removeEventListener('babilo://stream', mockHandler);
     }
   }
 
@@ -119,8 +121,8 @@ export class BblSession extends withI18n(LitElement) {
     this.timerSecs = 0;
   }
 
-  // ── Hang up ──
-  private async hangUp() {
+  // ── Hang up — called from bbl-controls @hang-up ──
+  async hangUp() {
     this._cleanupStreamListener();
     this.stopTimer();
     try {
@@ -141,7 +143,15 @@ export class BblSession extends withI18n(LitElement) {
     }
   }
 
-  // ── Recording (audio) ──
+  // ── Settings — re-emit upward to bbl-shell ──
+  private _onSettingsOpen() {
+    this.dispatchEvent(new CustomEvent('settings-open', {
+      bubbles: true,
+      composed: true,
+    }));
+  }
+
+  // ── Recording ──
   async toggleRecording() {
     const micPanel = this.shadowRoot?.querySelector('bbl-mic-panel') as
       HTMLElement & { selectedDevice?: string | null };
@@ -239,7 +249,7 @@ export class BblSession extends withI18n(LitElement) {
           flex-shrink-0">
           <span class="
             text-[11px] font-semibold tracking-[0.08em] uppercase
-            text-[var(--bbl-text-faint)]">
+                       text-[var(--bbl-text-faint)]">
             Transcript
           </span>
           <button
@@ -248,8 +258,8 @@ export class BblSession extends withI18n(LitElement) {
             @click=${() => { this.transcriptOpen = false; }}
             class="
               flex items-center justify-center w-7 h-7 rounded-md
-              text-[var(--bbl-text-muted)]
-              hover:bg-[var(--bbl-btn-hover)] hover:text-[var(--bbl-text)]
+                   text-[var(--bbl-text-muted)]
+                   hover:bg-[var(--bbl-btn-hover)] hover:text-[var(--bbl-text)]
               transition-[background,color] duration-150
               cursor-pointer">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
@@ -318,6 +328,7 @@ export class BblSession extends withI18n(LitElement) {
         .transcriptOpen=${this.transcriptOpen}
         @mic-toggle=${this.toggleRecording}
         @transcript-toggle=${() => { this.transcriptOpen = !this.transcriptOpen; }}
+        @hang-up=${this.hangUp}
         class="flex-shrink-0">
         <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
       </bbl-controls>
@@ -337,8 +348,9 @@ export class BblSession extends withI18n(LitElement) {
           .status=${statusText}
           .seconds=${this.timerSecs}
           .modeName=${this.sessionInfo.mode_name}
+          .settingsOpen=${this.settingsOpen}
           ?active=${this.recording}
-          @hang-up=${this.hangUp}>
+          @settings-open=${this._onSettingsOpen}>
         </bbl-top-bar>
 
         <!-- session-body: flex-row so bbl-stage and the side panel sit side by side -->

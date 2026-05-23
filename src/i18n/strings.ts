@@ -57,6 +57,7 @@ export const translations = {
     // Top Bar
     'topbar.active_session': 'Active session',
     'topbar.end_session': 'End session',
+    'topbar.settings': 'Settings',
     
     // Splash
     'splash.brand': 'BABILO',
@@ -66,6 +67,25 @@ export const translations = {
     'splash.load_vram': 'Instantiating network weights in VRAM...',
     'splash.error_hint': 'Check system logs or hardware configuration.',
     'splash.license': 'GPL-3.0-or-later • Copyright (C) 2026 Lutgaru',
+
+    //settings
+    'settings.title': 'Settings',
+
+    'settings.nav.audio': 'Audio',
+    'settings.audio.input_title': 'Audio Input',
+    'settings.audio.microphone': 'Microphone',
+    'settings.audio.microphone_sub': 'Select your input device',
+    'settings.audio.default': 'Default',
+    'settings.audio.output_title': 'Audio Output',
+    'settings.audio.output_volume': 'Volume',
+    'settings.audio.output_volume_sub': 'Adjust the output volume',
+
+    'settings.nav.language': 'Language',
+    'settings.language.interface_title': 'Language Settings',
+    'settings.language.ui_language': 'Interface Language',
+    'settings.language.ui_language_sub': 'Choose the language for the user interface',
+
+    'settings.close': 'Close',
   },
   
   es: {
@@ -119,7 +139,7 @@ export const translations = {
     // Top Bar
     'topbar.active_session': 'Sesión activa',
     'topbar.end_session': 'Terminar sesión',
-    
+    'topbar.settings': 'Configuración',
     // Splash
     'splash.brand': 'BABILO',
     'splash.tagline': 'IA de Lenguaje Local-First',
@@ -128,6 +148,26 @@ export const translations = {
     'splash.load_vram': 'Instanciando pesos de red en VRAM...',
     'splash.error_hint': 'Revisa los logs del sistema o la configuración de hardware.',
     'splash.license': 'GPL-3.0-or-later • Copyright (C) 2026 Lutgaru',
+
+    //settings
+    'settings.title': 'Configuración',
+
+    'settings.nav.audio': 'Audio',
+    'settings.audio.input_title': 'Entrada de audio',
+    'settings.audio.microphone': 'Micrófono',
+    'settings.audio.microphone_sub': 'Selecciona tu dispositivo de entrada',
+    'settings.audio.default': 'Predeterminado',
+    'settings.audio.output_title': 'Salida de audio',
+
+    'settings.audio.output_volume': 'Volumen',
+    'settings.audio.output_volume_sub': 'Ajusta el volumen de salida',
+
+    'settings.nav.language': 'Idioma',
+    'settings.language.interface_title': 'Configuración de idioma',
+    'settings.language.ui_language': 'Idioma de la interfaz',
+    'settings.language.ui_language_sub': 'Elige el idioma para la interfaz de usuario',
+
+    'settings.close': 'Cerrar',
   },
 } as const;
 

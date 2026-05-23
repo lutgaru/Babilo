@@ -12,11 +12,13 @@ import { AppView, SessionInfo, SessionSummary } from '../types/babilo';
 import './bbl-config-list';
 import './bbl-session';
 import './bbl-splash';
+import './bbl-settings';
 
 @customElement('bbl-shell')
 export class BblShell extends withI18n(LitElement) {
   @state() private view: AppView = 'config-list';
   @state() private sessionInfo: SessionInfo | null = null;
+  @state() private settingsOpen = false;
 
   // Core startup control states
   @state() private coreReady = false;
@@ -35,7 +37,6 @@ export class BblShell extends withI18n(LitElement) {
     const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
     if (isTauri) {
-      // REAL WORLD (TAURI + RUST BACKGROUND THREAD)
       try {
         this.unlistenReady = await listen('babilo://core-ready', () => {
           console.log('[Babilo Shell] Rust initialized successfully.');
@@ -50,17 +51,16 @@ export class BblShell extends withI18n(LitElement) {
         this.coreError = `Error registering native listeners: ${err}`;
       }
     } else {
-      // MOCK WORLD (Pure Browser for fast Dev)
       console.log('[Babilo Shell Mock] Simulating Gemma weight loading (2s)...');
 
       setTimeout(() => {
         this.splashMessage = this._t('splash.load_vram');
-      }, 1000);
+      }, 100);
 
       setTimeout(() => {
         console.log('[Babilo Shell Mock] Emulation completed.');
         this.coreReady = true;
-      }, 2200);
+      }, 200);
     }
   }
 
@@ -80,11 +80,19 @@ export class BblShell extends withI18n(LitElement) {
     this.view = 'config-list';
   }
 
+  private onSettingsOpen() {
+    this.settingsOpen = true;
+  }
+
+  private onSettingsClose() {
+    this.settingsOpen = false;
+  }
+
   render() {
-    // 1. If heavy engines are not ready or failed, force Splashscreen
+    // 1. Splash mientras los motores no están listos
     if (!this.coreReady) {
       return html`
-        <bbl-splash 
+        <bbl-splash
           .message=${this.splashMessage === 'Synchronizing Vulkan environments...'
           ? this._t('splash.sync_vulkan')
           : this.splashMessage}
@@ -93,19 +101,32 @@ export class BblShell extends withI18n(LitElement) {
       `;
     }
 
-    // 2. Normal screen flow once app is loaded
+    // 2. bbl-settings se monta siempre encima de la vista activa
+    //    y se anima con translateY según el atributo `open`.
+    const settingsOverlay = html`
+      <bbl-settings
+        .open=${this.settingsOpen}
+        @settings-close=${this.onSettingsClose}>
+      </bbl-settings>
+    `;
+
     if (this.view === 'session' && this.sessionInfo) {
       return html`
         <bbl-session
           .sessionInfo=${this.sessionInfo}
+          .settingsOpen=${this.settingsOpen}
+          @settings-open=${this.onSettingsOpen}
           @session-ended=${this.onSessionEnded}>
         </bbl-session>
+        ${settingsOverlay}
       `;
     }
+
     return html`
       <bbl-config-list
         @session-started=${this.onSessionStarted}>
       </bbl-config-list>
+      ${settingsOverlay}
     `;
   }
 }

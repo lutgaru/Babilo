@@ -148,9 +148,12 @@ export class BblControls extends withI18n(LitElement) {
             </svg>
           </button>
 
-          <!-- End call button -->
+           <!-- End call button -->
           <button
             title="${this._t('controls.hangup')}"
+            @click=${() => this.dispatchEvent(
+          new CustomEvent('hang-up', { bubbles: true, composed: true })
+        )}
             class="
               w-12 h-12 rounded-full
               bg-[var(--bbl-accent-dim)] border-[0.5px] border-[var(--bbl-accent-ring)]
