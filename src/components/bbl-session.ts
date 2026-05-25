@@ -28,6 +28,8 @@ export class BblSession extends withI18n(LitElement) {
   /** Passed down from bbl-shell to keep the gear icon active */
   @property({ type: Boolean }) settingsOpen = false;
 
+  @property({ attribute: false }) selectedMic: string | null = null;
+
   // ── Estado reactivo ──
   @state() aiState: AIState = 'idle';
   @state() recording = false;
@@ -153,9 +155,7 @@ export class BblSession extends withI18n(LitElement) {
 
   // ── Recording ──
   async toggleRecording() {
-    const micPanel = this.shadowRoot?.querySelector('bbl-mic-panel') as
-      HTMLElement & { selectedDevice?: string | null };
-    const selectedDevice = micPanel?.selectedDevice ?? null;
+    const selectedDevice = this.selectedMic;
 
     if (!this.recording) {
       try {
@@ -330,7 +330,6 @@ export class BblSession extends withI18n(LitElement) {
         @transcript-toggle=${() => { this.transcriptOpen = !this.transcriptOpen; }}
         @hang-up=${this.hangUp}
         class="flex-shrink-0">
-        <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
       </bbl-controls>
     `;
   }

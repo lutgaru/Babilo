@@ -7,6 +7,7 @@ import { LitElement, html } from 'lit';
 import { property, state, customElement } from 'lit/decorators.js';
 import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
+import './bbl-mic-panel';
 
 type SettingsSection = 'audio' | 'language' | 'appearance';
 
@@ -68,17 +69,7 @@ export class BblSettings extends withI18n(LitElement) {
     private _audioSection() {
         const deviceSelect = (id: string) => html`
       <div class="relative">
-        <select id=${id}
-          class="appearance-none bg-bbl-surface border border-bbl-border text-bbl-text
-                 rounded-bbl-sm px-2.5 py-1.5 text-xs cursor-pointer outline-none
-                 focus:border-bbl-accent2 pr-7">
-          <option>${this._t('settings.audio.default')}</option>
-        </select>
-        <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2
-                    w-3 h-3 text-bbl-text-muted"
-             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
       </div>
     `;
 

@@ -53,27 +53,18 @@ export class BblMicPanel extends withI18n(LitElement) {
   private _onDeviceChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     this.selected = target.value;
+
+    this.dispatchEvent(new CustomEvent('mic-change', {
+      detail: { device: this.selected || null },
+      bubbles: true,
+      composed: true,   // ← cruza shadow boundaries
+    }));
   }
 
   // ── Render ──
   render() {
     return html`
       <div class="flex items-center gap-2">
-
-        <!-- Label -->
-        <span class="
-          flex items-center gap-[5px]
-          text-[12px] text-[var(--bbl-text-muted)]
-          whitespace-nowrap
-        ">
-          <svg class="w-[14px] h-[14px]" viewBox="0 0 16 16"
-               fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="5" y="1" width="6" height="8" rx="3"/>
-            <path d="M2 7v1a6 6 0 0 0 12 0V7" stroke-linecap="round"/>
-            <path d="M8 14v2M6 16h4" stroke-linecap="round"/>
-          </svg>
-          ${this._t('mic.label')}
-        </span>
 
         <!-- Select wrapper -->
         <div class="relative flex flex-1 items-center">

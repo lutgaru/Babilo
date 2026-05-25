@@ -24,6 +24,7 @@ export class BblShell extends withI18n(LitElement) {
   @state() private coreReady = false;
   @state() private coreError = '';
   @state() private splashMessage = 'Synchronizing Vulkan environments...';
+  @state() private _selectedMic: string | null = null;
 
   private unlistenReady: UnlistenFn | null = null;
   private unlistenError: UnlistenFn | null = null;
@@ -46,6 +47,11 @@ export class BblShell extends withI18n(LitElement) {
         this.unlistenError = await listen<string>('babilo://core-error', (event) => {
           console.error('[Babilo Shell] Fatal error reported by backend:', event.payload);
           this.coreError = event.payload;
+        });
+
+        this.addEventListener('mic-change', (e: Event) => {
+          console.log('[Babilo Shell] Mic changed:', (e as CustomEvent).detail.device);
+          this._selectedMic = (e as CustomEvent<{ device: string | null }>).detail.device;
         });
       } catch (err) {
         this.coreError = `Error registering native listeners: ${err}`;
@@ -115,6 +121,7 @@ export class BblShell extends withI18n(LitElement) {
         <bbl-session
           .sessionInfo=${this.sessionInfo}
           .settingsOpen=${this.settingsOpen}
+          .selectedMic=${this._selectedMic}
           @settings-open=${this.onSettingsOpen}
           @session-ended=${this.onSessionEnded}>
         </bbl-session>
