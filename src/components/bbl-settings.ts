@@ -5,7 +5,7 @@
 
 import { LitElement, html } from 'lit';
 import { property, state, customElement } from 'lit/decorators.js';
-import { withI18n } from '../i18n';
+import { withI18n, setLocale, getLocale } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import './bbl-mic-panel';
 
@@ -115,11 +115,12 @@ export class BblSettings extends withI18n(LitElement) {
         const langSelect = html`
       <div class="relative">
         <select
+          @change=${(e: Event) => setLocale((e.target as HTMLSelectElement).value as 'en' | 'es')}
           class="appearance-none bg-bbl-surface border border-bbl-border text-bbl-text
                  rounded-bbl-sm px-2.5 py-1.5 text-xs cursor-pointer outline-none
                  focus:border-bbl-accent2 pr-7">
-          <option value="en">English</option>
-          <option value="es">Español</option>
+          <option value="en" ?selected=${getLocale() === 'en'}>English</option>
+          <option value="es" ?selected=${getLocale() === 'es'}>Español</option>
         </select>
         <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2
                     w-3 h-3 text-bbl-text-muted"
