@@ -83,7 +83,12 @@ pub fn run() {
                         None
                     };
 
-                    match llama::LlmModel::new(&model_path, mmproj, config::LlmConfig::default()) {
+                    match llama::LlmModel::new(
+                        &model_path,
+                        mmproj,
+                        config::LlmConfig::default(),
+                        config::InferenceConfig::default(),
+                    ) {
                         Ok(model) => Some(llama::InferenceEngine::new(model)),
                         Err(e) => {
                             eprintln!("❌ Failed to load LLM: {}", e);

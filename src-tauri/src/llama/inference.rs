@@ -10,8 +10,10 @@
 
 //! Lógica de inferencia: tokenización, generación, manejo de contexto
 
+use std::time::SystemTime;
+
 use crate::{
-    config::LlmConfig,
+    config::{InferenceConfig, LlmConfig, SeedOption},
     errors::{AppError, LlmError},
     llama::model::LlmModel,
     schemas::{TokenEvent, SENTINEL},
@@ -72,13 +74,14 @@ impl InferenceEngine {
         // n_ctx es u32 (Copy) y config se clona una vez; ambos son baratos.
         let n_ctx = self.model.n_ctx(); // u32, Copy
         let config = self.model.config().clone();
+        let inference_config = self.model.inference_config().clone();
 
         // ── Fase 2: borrow mutable exclusivo ─────────────────────────────────
         let ctx = self.model.ctx_mut()?;
 
         ensure_context_space(ctx, &mut self.state, n_ctx, tokens.len())?;
         decode_tokens(ctx, &mut self.state, &tokens)?;
-        generate(ctx, &mut self.state, &config)
+        generate(ctx, &mut self.state, &config, &inference_config)
     }
 
     pub fn infer_audio(&mut self, audio_pcm: &[f32], prompt: &str) -> Result<String, AppError> {
@@ -111,6 +114,7 @@ impl InferenceEngine {
         let total_tokens = chunks.total_tokens();
         let n_ctx = self.model.n_ctx();
         let config = self.model.config().clone();
+        let inference_config = self.model.inference_config().clone();
 
         // ── Fase 2: split de borrows ──────────────────────────────────────────
         // eval_chunks necesita (&mut ctx, &mtmd) simultáneamente.
@@ -127,7 +131,7 @@ impl InferenceEngine {
         self.state.n_past = new_n_past;
         self.state.system_prompt_evaluated = true;
 
-        generate(ctx, &mut self.state, &config)
+        generate(ctx, &mut self.state, &config, &inference_config)
     }
 
     // inference.rs — fix infer_audio_streaming: eval_chunks + closure callback
@@ -162,6 +166,7 @@ impl InferenceEngine {
         let total_tokens = chunks.total_tokens();
         let n_ctx = self.model.n_ctx();
         let config = self.model.config().clone();
+        let inference_config = self.model.inference_config().clone();
 
         let (ctx, mtmd) = self.model.split_ctx_mtmd()?;
 
@@ -175,7 +180,7 @@ impl InferenceEngine {
         self.state.n_past = new_n_past;
         self.state.system_prompt_evaluated = true;
 
-        generate_babilo_streaming(ctx, &mut self.state, &config, on_token)?;
+        generate_babilo_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
 
         Ok(())
     }
@@ -196,6 +201,7 @@ impl InferenceEngine {
 
         let n_ctx = self.model.n_ctx();
         let config = self.model.config().clone();
+        let inference_config = self.model.inference_config().clone();
 
         let ctx = self.model.ctx_mut()?;
 
@@ -204,7 +210,7 @@ impl InferenceEngine {
 
         self.state.system_prompt_evaluated = true;
 
-        generate_babilo_streaming(ctx, &mut self.state, &config, on_token)?;
+        generate_babilo_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
 
         Ok(())
     }
@@ -271,6 +277,7 @@ fn generate_babilo_streaming<F>(
     ctx: &mut LlamaContext<'_>,
     state: &mut InferenceState,
     config: &LlmConfig,
+    inference_config: &InferenceConfig,
     mut on_token: F,
 ) -> Result<String, AppError>
 where
@@ -278,11 +285,13 @@ where
 {
     let model = ctx.model;
 
+    let seed = resolve_seed(inference_config);
+
     let mut sampler = LlamaSampler::chain_simple([
-        LlamaSampler::top_k(40),
-        LlamaSampler::top_p(0.9, 1),
-        LlamaSampler::temp(0.7),
-        LlamaSampler::dist(42),
+        LlamaSampler::top_k(inference_config.top_k),
+        LlamaSampler::top_p(inference_config.top_p, 1),
+        LlamaSampler::temp(inference_config.temperature),
+        LlamaSampler::dist(seed),
     ]);
 
     let mut output_bytes = Vec::new();
@@ -353,20 +362,33 @@ where
 /// Genera tokens de respuesta hasta EOG o límite de config.
 /// Obtiene el LlamaModel directamente del contexto (ctx.model()),
 /// así nunca necesita un &LlmModel extra.
+fn resolve_seed(inference_config: &InferenceConfig) -> u32 {
+    match inference_config.seed_option {
+        SeedOption::Random => SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u32,
+        SeedOption::Fixed => inference_config.seed_value,
+    }
+}
+
 fn generate(
     ctx: &mut LlamaContext<'_>,
     state: &mut InferenceState,
     config: &LlmConfig,
+    inference_config: &InferenceConfig,
 ) -> Result<String, AppError> {
     // LlamaContext expone model() → &LlamaModel. Este borrow es del ctx,
     // completamente independiente del LlmModel wrapper.
     let model = ctx.model;
 
+    let seed = resolve_seed(inference_config);
+
     let mut sampler = LlamaSampler::chain_simple([
-        LlamaSampler::top_k(40),
-        LlamaSampler::top_p(0.9, 1),
-        LlamaSampler::temp(0.7),
-        LlamaSampler::dist(42),
+        LlamaSampler::top_k(inference_config.top_k),
+        LlamaSampler::top_p(inference_config.top_p, 1),
+        LlamaSampler::temp(inference_config.temperature),
+        LlamaSampler::dist(seed),
     ]);
 
     let mut output_bytes = Vec::new();

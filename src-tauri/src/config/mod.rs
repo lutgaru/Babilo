@@ -8,7 +8,6 @@
  * (at your option) any later version.
  */
 
- 
 //! Configuración centralizada de la aplicación
 
 use serde::{Deserialize, Serialize};
@@ -38,8 +37,8 @@ impl AudioConfig {
             channels: 1,
             chunk_duration_secs: 30,
             mel_bins: 128,
-            window_size: 320,  // 20ms @ 16kHz
-            hop_size: 160,     // 10ms hop
+            window_size: 320, // 20ms @ 16kHz
+            hop_size: 160,    // 10ms hop
         }
     }
 
@@ -78,6 +77,33 @@ pub struct TtsConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub enum SeedOption {
+    Random,
+    Fixed,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct InferenceConfig {
+    pub temperature: f32,
+    pub top_p: f32,
+    pub top_k: i32,
+    pub seed_option: SeedOption,
+    pub seed_value: u32,
+}
+
+impl Default for InferenceConfig {
+    fn default() -> Self {
+        Self {
+            temperature: 0.7,
+            top_p: 0.9,
+            top_k: 40,
+            seed_option: SeedOption::Random,
+            seed_value: 7,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct LearningModeConfig {
     pub name: String,
     pub system_prompt: String,
@@ -87,7 +113,8 @@ impl Default for LearningModeConfig {
     fn default() -> Self {
         Self {
             name: "default".to_string(),
-            system_prompt: "You are a helpful assistant that learns from the user's audio input.".to_string(),
+            system_prompt: "You are a helpful assistant that learns from the user's audio input."
+                .to_string(),
         }
     }
 }

@@ -8,9 +8,12 @@
  * (at your option) any later version.
  */
 
- 
 //! Gestión del modelo llama.cpp: carga, contexto, configuración
 
+use crate::{
+    config::{InferenceConfig, LlmConfig},
+    errors::{AppError, LlmError},
+};
 use llama_cpp_2::{
     context::params::LlamaContextParams,
     context::LlamaContext,
@@ -21,7 +24,6 @@ use llama_cpp_2::{
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::OnceLock;
-use crate::{config::LlmConfig, errors::{AppError, LlmError}};
 
 static BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
 
@@ -47,15 +49,16 @@ pub fn get_backend() -> &'static LlamaBackend {
 /// incluso con optimizaciones de release.
 struct Inner {
     // ctx ANTES de model → se dropea primero (drop order inverso al de declaración)
-    ctx:          Option<LlamaContext<'static>>,
-    model:        LlamaModel,
+    ctx: Option<LlamaContext<'static>>,
+    model: LlamaModel,
     mtmd_context: Option<MtmdContext>,
 }
 
 pub struct LlmModel {
-    inner:      Pin<Box<Inner>>,
+    inner: Pin<Box<Inner>>,
     ctx_params: LlamaContextParams,
-    config:     LlmConfig,
+    config: LlmConfig,
+    inference_config: InferenceConfig,
     audio_embed_dim: usize,
 }
 
@@ -64,14 +67,14 @@ unsafe impl Sync for LlmModel {}
 
 impl LlmModel {
     pub fn new(
-        model_path:  &Path,
+        model_path: &Path,
         mmproj_path: Option<&Path>,
-        config:      LlmConfig,
+        config: LlmConfig,
+        inference_config: InferenceConfig,
     ) -> Result<Self, AppError> {
         let backend = get_backend();
 
-        let model_params = LlamaModelParams::default()
-            .with_n_gpu_layers(config.n_gpu_layers);
+        let model_params = LlamaModelParams::default().with_n_gpu_layers(config.n_gpu_layers);
 
         let model = LlamaModel::load_from_file(backend, model_path, &model_params)
             .map_err(|e| LlmError::ModelLoad(e.to_string()))?;
@@ -85,11 +88,9 @@ impl LlmModel {
 
         let mtmd_context = if let Some(mmproj) = mmproj_path {
             let params = llama_cpp_2::mtmd::MtmdContextParams::default();
-            let mtmd = MtmdContext::init_from_file(
-                mmproj.to_string_lossy().as_ref(),
-                &model,
-                &params,
-            ).map_err(|e| LlmError::MtmdInit(e.to_string()))?;
+            let mtmd =
+                MtmdContext::init_from_file(mmproj.to_string_lossy().as_ref(), &model, &params)
+                    .map_err(|e| LlmError::MtmdInit(e.to_string()))?;
             Some(mtmd)
         } else {
             None
@@ -99,7 +100,7 @@ impl LlmModel {
         // para que la dirección de `model` sea definitiva cuando
         // new_context() guarda el puntero interno.
         let mut inner = Box::new(Inner {
-            ctx:   None,
+            ctx: None,
             model,
             mtmd_context,
         });
@@ -107,7 +108,8 @@ impl LlmModel {
         // SAFETY: inner.model ya está en su dirección final (heap).
         // Pin garantiza que nunca se moverá. ctx se declara antes que
         // model en Inner → drop order correcto.
-        let ctx_raw = inner.model
+        let ctx_raw = inner
+            .model
             .new_context(backend, ctx_params.clone())
             .map_err(|e| LlmError::ContextInit(e.to_string()))?;
         inner.ctx = Some(unsafe { std::mem::transmute(ctx_raw) });
@@ -116,6 +118,7 @@ impl LlmModel {
             inner: Pin::new(inner),
             ctx_params,
             config,
+            inference_config: inference_config.clone(),
             audio_embed_dim: 2304,
         })
     }
@@ -128,7 +131,8 @@ impl LlmModel {
         // Dropear ctx viejo ANTES de crear el nuevo
         inner.ctx = None;
 
-        let ctx_raw = inner.model
+        let ctx_raw = inner
+            .model
             .new_context(get_backend(), self.ctx_params.clone())
             .map_err(|e| LlmError::ContextInit(e.to_string()))?;
 
@@ -140,7 +144,8 @@ impl LlmModel {
     pub fn ctx_mut(&mut self) -> Result<&mut LlamaContext<'_>, AppError> {
         // SAFETY: no movemos Inner, solo tomamos referencia mutable a ctx.
         let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
-        inner.ctx
+        inner
+            .ctx
             .as_mut()
             .map(|c| unsafe {
                 std::mem::transmute::<&mut LlamaContext<'static>, &mut LlamaContext<'_>>(c)
@@ -149,35 +154,27 @@ impl LlmModel {
     }
 
     /// Retorna (&mut ctx, &mtmd) simultáneamente via borrow split explícito.
-    pub fn split_ctx_mtmd(
-        &mut self,
-    ) -> Result<(&mut LlamaContext<'_>, &MtmdContext), AppError> {
+    pub fn split_ctx_mtmd(&mut self) -> Result<(&mut LlamaContext<'_>, &MtmdContext), AppError> {
         // SAFETY: no movemos Inner.
         let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
 
-        let ctx = inner.ctx
-            .as_mut()
-            .ok_or(LlmError::NotInitialized)?;
+        let ctx = inner.ctx.as_mut().ok_or(LlmError::NotInitialized)?;
 
-        let mtmd = inner.mtmd_context
+        let mtmd = inner
+            .mtmd_context
             .as_ref()
             .ok_or(LlmError::MtmdInit("No mmproj loaded".into()))?;
 
         // SAFETY: ctx y mtmd_context son campos distintos de Inner → no se solapan.
         let ctx_ptr: *mut LlamaContext<'static> = ctx as *mut _;
-        let ctx_ref: &mut LlamaContext<'_> = unsafe {
-            std::mem::transmute(&mut *ctx_ptr)
-        };
+        let ctx_ref: &mut LlamaContext<'_> = unsafe { std::mem::transmute(&mut *ctx_ptr) };
 
         Ok((ctx_ref, mtmd))
     }
 
     /// Tamaño del contexto en tokens.
     pub fn n_ctx(&self) -> u32 {
-        self.ctx_params
-            .n_ctx()
-            .map(|n| n.get())
-            .unwrap_or(4096)
+        self.ctx_params.n_ctx().map(|n| n.get()).unwrap_or(4096)
     }
 
     /// Verifica si agregar `needed` tokens llenaría el contexto.
@@ -191,9 +188,18 @@ impl LlmModel {
         &self.inner.model
     }
 
-    pub fn config(&self) -> &LlmConfig            { &self.config }
-    pub fn audio_embed_dim(&self) -> usize         { self.audio_embed_dim }
-    pub fn ctx_params(&self) -> &LlamaContextParams { &self.ctx_params }
+    pub fn config(&self) -> &LlmConfig {
+        &self.config
+    }
+    pub fn audio_embed_dim(&self) -> usize {
+        self.audio_embed_dim
+    }
+    pub fn ctx_params(&self) -> &LlamaContextParams {
+        &self.ctx_params
+    }
+    pub fn inference_config(&self) -> &InferenceConfig {
+        &self.inference_config
+    }
 
     pub fn mtmd_context(&self) -> Option<&MtmdContext> {
         self.inner.mtmd_context.as_ref()
@@ -207,7 +213,7 @@ impl LlmModel {
 
     pub fn context_usage(&self, n_past: i32) -> (u32, u32) {
         let total = self.n_ctx();
-        let used  = (n_past.max(0) as u32).min(total);
+        let used = (n_past.max(0) as u32).min(total);
         (used, total)
     }
 
