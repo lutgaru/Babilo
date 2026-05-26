@@ -20,18 +20,24 @@
     ],
     "security": {
       "csp": null,
-       "assetProtocol": {
+      "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$APPDATA/**", "$TEMP/**"]
+          "allow": [
+            "$APPDATA/**",
+            "$TEMP/**"
+          ]
         }
       }
     }
   },
-   "plugins": {
+  "plugins": {
     "protocol": {
       "asset": {
-        "scope": ["$APPDATA/**", "$TEMP/**"]
+        "scope": [
+          "$APPDATA/**",
+          "$TEMP/**"
+        ]
       }
     }
   },
@@ -48,7 +54,8 @@
     "resources": [
       "../assets/*",
       "../models/*",
-      "../modes/*"
+      "../modes/*",
+      "../config/*"
     ]
   }
 }

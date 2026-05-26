@@ -50,9 +50,20 @@ pub fn run() {
             // 1. Ultra-lightweight and instant initializations first
             utils::init_logging();
 
-            // Set up global state with empty/initial containers
+            // Load persistent settings (creates default settings.json if missing)
+            use config::settings_loader::SettingsLoader;
+            let loader = SettingsLoader::new();
+            let persistent = loader.load().expect("Failed to load settings");
+            loader
+                .save(&persistent)
+                .expect("Failed to write default settings");
+            let app_cfg = persistent.clone().into_app_config();
+            let inference_cfg: config::InferenceConfig = persistent.inference().clone().into();
+            let llm_cfg = app_cfg.llm.clone();
+
+            // Set up global state with loaded configuration
             app.manage(AppState {
-                config: config::AppConfig::default(),
+                config: app_cfg,
                 audio_capture: std::sync::Mutex::new(None),
                 audio_stream: std::sync::Mutex::new(None),
                 audio_buffer: std::sync::Arc::new(std::sync::Mutex::new(Vec::with_capacity(
@@ -83,12 +94,7 @@ pub fn run() {
                         None
                     };
 
-                    match llama::LlmModel::new(
-                        &model_path,
-                        mmproj,
-                        config::LlmConfig::default(),
-                        config::InferenceConfig::default(),
-                    ) {
+                    match llama::LlmModel::new(&model_path, mmproj, llm_cfg, inference_cfg) {
                         Ok(model) => Some(llama::InferenceEngine::new(model)),
                         Err(e) => {
                             eprintln!("❌ Failed to load LLM: {}", e);

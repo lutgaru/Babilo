@@ -10,6 +10,8 @@
 
 //! Configuración centralizada de la aplicación
 
+pub mod settings_loader;
+
 use serde::{Deserialize, Serialize};
 
 /// Configuración de captura y procesamiento de audio
@@ -64,7 +66,7 @@ impl Default for LlmConfig {
             batch_size: 2048,
             ubatch_size: 512,
             n_gpu_layers: 99, // Offload máximo a GPU
-            max_output_tokens: 1000,
+            max_output_tokens: 10000,
         }
     }
 }
@@ -76,7 +78,7 @@ pub struct TtsConfig {
     pub ttl: TtlConfig,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SeedOption {
     Random,
     Fixed,
@@ -99,22 +101,6 @@ impl Default for InferenceConfig {
             top_k: 40,
             seed_option: SeedOption::Random,
             seed_value: 7,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize)]
-pub struct LearningModeConfig {
-    pub name: String,
-    pub system_prompt: String,
-}
-
-impl Default for LearningModeConfig {
-    fn default() -> Self {
-        Self {
-            name: "default".to_string(),
-            system_prompt: "You are a helpful assistant that learns from the user's audio input."
-                .to_string(),
         }
     }
 }
@@ -147,7 +133,6 @@ pub struct AppConfig {
     pub audio: AudioConfig,
     pub llm: LlmConfig,
     pub tts: Option<TtsConfig>,
-    pub learning_mode: LearningModeConfig,
 }
 
 impl Default for AppConfig {
@@ -156,7 +141,6 @@ impl Default for AppConfig {
             audio: AudioConfig::default(),
             llm: LlmConfig::default(),
             tts: None, // Se carga desde tts.json en runtime
-            learning_mode: LearningModeConfig::default(),
         }
     }
 }
