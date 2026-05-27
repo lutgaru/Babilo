@@ -7,6 +7,8 @@ import { LitElement, html } from 'lit';
 import { property, state, customElement } from 'lit/decorators.js';
 import { withI18n, setLocale, getLocale } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
+import { loadSettings, saveSettings } from '../invoke';
+import type { AppSettings } from '../types/babilo';
 import './bbl-mic-panel';
 
 type SettingsSection = 'audio' | 'language' | 'appearance';
@@ -20,13 +22,46 @@ export class BblSettings extends withI18n(LitElement) {
     @state()
     private _section: SettingsSection = 'audio';
 
+    @state()
+    private _settings: AppSettings | null = null;
+
     connectedCallback() {
         super.connectedCallback();
         if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
     }
 
+    updated(changed: Map<string, unknown>) {
+        if (changed.has('open') && this.open) {
+            this._initSettings();
+        }
+    }
+
+    private async _initSettings() {
+        try {
+            this._settings = await loadSettings();
+        } catch (e) {
+            console.error('Failed to load settings:', e);
+        }
+    }
+
+    private async _updateSettings(partial: Partial<AppSettings>) {
+        if (!this._settings) return;
+        const next: AppSettings = { ...this._settings, ...partial };
+        this._settings = next;
+        try {
+            await saveSettings(next);
+        } catch (e) {
+            console.error('Failed to save settings:', e);
+        }
+    }
+
     private _close() {
         this.dispatchEvent(new CustomEvent('settings-close', { bubbles: true, composed: true }));
+    }
+
+    private _onLanguageChange(lang: 'en' | 'es') {
+        setLocale(lang);
+        this._updateSettings({ gui: { ...this._settings?.gui ?? { theme: 'light', language: lang }, language: lang } });
     }
 
     private _navItem(id: SettingsSection, label: string, icon: unknown) {
@@ -115,7 +150,7 @@ export class BblSettings extends withI18n(LitElement) {
         const langSelect = html`
       <div class="relative">
         <select
-          @change=${(e: Event) => setLocale((e.target as HTMLSelectElement).value as 'en' | 'es')}
+          @change=${(e: Event) => this._onLanguageChange((e.target as HTMLSelectElement).value as 'en' | 'es')}
           class="appearance-none bg-bbl-surface border border-bbl-border text-bbl-text
                  rounded-bbl-sm px-2.5 py-1.5 text-xs cursor-pointer outline-none
                  focus:border-bbl-accent2 pr-7">

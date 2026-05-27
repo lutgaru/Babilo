@@ -4,6 +4,7 @@
  */
 
 import {
+    AppSettings,
     AudioDevice,
     ModeFileInfo,
     SessionInfo,
@@ -102,6 +103,37 @@ export const mockSessionSummary = (sessionId: string, modeName: string): Session
     turns: 5,
     average_score: 78
 });
+
+// 7. Default Settings (mirrors Rust PersistentSettings::default())
+export const mockSettings: AppSettings = {
+    audio: {
+        sample_rate: 16000,
+        channels: 1,
+        chunk_duration_secs: 30,
+        mel_bins: 128,
+        window_size: 320,
+        hop_size: 160,
+    },
+    llm: {
+        context_size: 4096,
+        batch_size: 2048,
+        ubatch_size: 512,
+        n_gpu_layers: 99,
+        max_output_tokens: 10000,
+    },
+    inference: {
+        temperature: 0.7,
+        top_p: 0.9,
+        top_k: 40,
+        seed_option: 'Random',
+        seed_value: 7,
+    },
+    tts: null,
+    gui: {
+        theme: 'light',
+        language: 'en',
+    },
+};
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

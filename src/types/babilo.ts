@@ -66,3 +66,60 @@ export type StreamEvent =
   | { type: 'error'; message: string };
 
 export type AppView = 'config-list' | 'session';
+
+// ── Settings (mirrors Rust PersistentSettings) ──
+
+export type SeedOption = 'Random' | 'Fixed';
+
+export interface AudioSettings {
+  sample_rate: number;
+  channels: number;
+  chunk_duration_secs: number;
+  mel_bins: number;
+  window_size: number;
+  hop_size: number;
+}
+
+export interface LlmSettings {
+  context_size: number;
+  batch_size: number;
+  ubatch_size: number;
+  n_gpu_layers: number;
+  max_output_tokens: number;
+}
+
+export interface InferenceSettings {
+  temperature: number;
+  top_p: number;
+  top_k: number;
+  seed_option: SeedOption;
+  seed_value: number;
+}
+
+export interface AeSettings {
+  sample_rate: number;
+  base_chunk_size: number;
+}
+
+export interface TtlSettings {
+  chunk_compress_factor: number;
+  latent_dim: number;
+}
+
+export interface TtsSettings {
+  ae: AeSettings;
+  ttl: TtlSettings;
+}
+
+export interface GuiSettings {
+  theme: string;
+  language: string;
+}
+
+export interface AppSettings {
+  audio: AudioSettings;
+  llm: LlmSettings;
+  inference: InferenceSettings;
+  tts: TtsSettings | null;
+  gui: GuiSettings;
+}

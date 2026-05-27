@@ -4,7 +4,7 @@
  */
 
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
-import { AudioDevice, ModeFileInfo, SessionInfo, SessionSummary } from './types/babilo';
+import { AppSettings, AudioDevice, ModeFileInfo, SessionInfo, SessionSummary } from './types/babilo';
 import * as mocks from './mocks/babiloMocks'; 
 import { simulateRustStream } from './mocks/babiloMocks';
 
@@ -52,4 +52,15 @@ export const startSession = async (path: string): Promise<SessionInfo> => {
   if (isTauri()) return tauriInvoke('start_session', { path });
   await delay(500);
   return mocks.mockSessionStart(path);
+};
+
+export const loadSettings = async (): Promise<AppSettings> => {
+  if (isTauri()) return tauriInvoke('load_settings');
+  await delay(200);
+  return mocks.mockSettings;
+};
+
+export const saveSettings = async (settings: AppSettings): Promise<void> => {
+  if (isTauri()) return tauriInvoke('save_settings', { settings });
+  console.log('[Babilo Mock] Settings saved:', settings);
 };
