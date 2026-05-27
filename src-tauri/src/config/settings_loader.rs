@@ -13,25 +13,10 @@
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
-
 use crate::config::GuiConfig;
+use crate::errors::SettingsError;
 
 use super::{AppConfig, AudioConfig, InferenceConfig, LlmConfig, SeedOption};
-
-// ---------------------------------------------------------------------------
-// Error type
-// ---------------------------------------------------------------------------
-
-/// Errors when loading/saving configuration
-#[derive(Debug, Error)]
-pub enum SettingsError {
-    #[error("Failed to read configuration file: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Error serializing/deserializing configuration: {0}")]
-    Json(#[from] serde_json::Error),
-}
 
 // ---------------------------------------------------------------------------
 // PersistentSettings – full serde copy of all config groups

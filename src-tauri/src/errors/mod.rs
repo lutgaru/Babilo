@@ -12,6 +12,16 @@
 
 use thiserror::Error;
 
+/// Errors when loading/saving configuration
+#[derive(Debug, Error)]
+pub enum SettingsError {
+    #[error("Failed to read configuration file: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Error serializing/deserializing configuration: {0}")]
+    Json(#[from] serde_json::Error),
+}
+
 #[derive(Error, Debug)]
 pub enum AppError {
     #[error("Audio: {0}")]
