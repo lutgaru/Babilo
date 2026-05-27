@@ -16,8 +16,8 @@
 use std::sync::Arc;
 
 use crate::{
-    audio::capture::AudioCapture, audio::list_input_devices, errors::AppError, modes::ModeFileInfo,
-    state::AppState,
+    audio::capture::AudioCapture, audio::list_input_devices, config::settings_loader::SettingsLoader,
+    errors::AppError, modes::ModeFileInfo, schemas::PersistentSettings, state::AppState,
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -233,6 +233,20 @@ pub fn get_context_usage(state: State<'_, AppState>) -> Result<ContextUsage, Str
             percent: 0.0,
         })
     }
+}
+
+// ─── Settings ──────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn load_settings() -> Result<PersistentSettings, String> {
+    let loader = SettingsLoader::new();
+    loader.load().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn save_settings(settings: PersistentSettings) -> Result<(), String> {
+    let loader = SettingsLoader::new();
+    loader.save(&settings).map_err(|e| e.to_string())
 }
 
 // ─── Misc ────────────────────────────────────────────────────

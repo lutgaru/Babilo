@@ -10,8 +10,10 @@
 
 pub mod analysis;
 pub mod session;
+pub mod settings;
 pub use analysis::BabiloAnalysis;
 pub use session::{SessionCaps, SessionInfo, SessionSummary};
+pub use settings::PersistentSettings;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
