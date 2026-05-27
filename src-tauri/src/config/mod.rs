@@ -112,6 +112,21 @@ pub struct AeConfig {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct GuiConfig {
+    pub language: String,
+    pub theme: String,
+}
+
+impl Default for GuiConfig {
+    fn default() -> Self {
+        Self {
+            language: "en".into(),
+            theme: "light".into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct TtlConfig {
     pub chunk_compress_factor: i32,
     pub latent_dim: i32,
@@ -133,6 +148,7 @@ pub struct AppConfig {
     pub audio: AudioConfig,
     pub llm: LlmConfig,
     pub tts: Option<TtsConfig>,
+    pub gui: GuiConfig,
 }
 
 impl Default for AppConfig {
@@ -141,6 +157,7 @@ impl Default for AppConfig {
             audio: AudioConfig::default(),
             llm: LlmConfig::default(),
             tts: None, // Se carga desde tts.json en runtime
+            gui: GuiConfig::default(),
         }
     }
 }

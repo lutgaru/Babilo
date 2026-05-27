@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::config::GuiConfig;
+
 use super::{AppConfig, AudioConfig, InferenceConfig, LlmConfig, SeedOption};
 
 // ---------------------------------------------------------------------------
@@ -43,6 +45,7 @@ pub struct PersistentSettings {
     pub llm: PersistentLlmConfig,
     pub inference: PersistentInferenceConfig,
     pub tts: Option<PersistentTtsConfig>,
+    pub gui: PersistentGuiConfig,
 }
 
 impl PersistentSettings {
@@ -53,6 +56,7 @@ impl PersistentSettings {
             audio: self.audio.into(),
             llm: self.llm.into(),
             tts: self.tts.map(PersistentTtsConfig::into_tts),
+            gui: self.gui.into(),
         }
     }
 
@@ -64,6 +68,7 @@ impl PersistentSettings {
             llm: cfg.llm.into(),
             inference: inference.into(),
             tts: cfg.tts.map(PersistentTtsConfig::from_tts),
+            gui: PersistentGuiConfig::from(cfg.gui),
         }
     }
 
@@ -79,6 +84,31 @@ impl PersistentSettings {
 impl Default for PersistentSettings {
     fn default() -> Self {
         Self::from_app_config(AppConfig::default(), InferenceConfig::default())
+    }
+}
+
+// -- GUI --------------------------------------------------------------------
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PersistentGuiConfig {
+    pub theme: String,
+    pub language: String,
+}
+
+impl From<PersistentGuiConfig> for GuiConfig {
+    fn from(p: PersistentGuiConfig) -> Self {
+        GuiConfig {
+            theme: p.theme,
+            language: p.language,
+        }
+    }
+}
+
+impl From<GuiConfig> for PersistentGuiConfig {
+    fn from(c: GuiConfig) -> Self {
+        PersistentGuiConfig {
+            theme: c.theme,
+            language: c.language,
+        }
     }
 }
 
@@ -256,7 +286,7 @@ pub struct SettingsLoader {
     path: std::path::PathBuf,
 }
 
-fn modes_dir() -> PathBuf {
+fn config_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("Project root not found")
@@ -268,7 +298,7 @@ impl SettingsLoader {
 
     pub fn new() -> Self {
         Self {
-            path: modes_dir().join("settings.json"),
+            path: config_dir().join("settings.json"),
         }
     }
 
