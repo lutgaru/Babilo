@@ -425,10 +425,15 @@ pub fn build_turn_prompt(
     user_input: &str,
     is_audio: bool,
 ) -> String {
-    let marker = llama_cpp_2::mtmd::mtmd_default_marker();
+    let marker = llama_cpp_2::mtmd::mtmd_default_marker().to_string();
+    let mut prompt = String::new();
 
-    let mut parts = Vec::with_capacity(4);
+    // BOS solo en el primer turno
+    if injection.turns_processed == 0 {
+        prompt.push_str("<bos>");
+    }
 
+    // System: solo en el primer turno o cada N intervalos
     if injection.turns_processed == 0 || injection.should_remind_system(SYSTEM_REMINDER_INTERVAL) {
         let system = format!(
             "{}.{}.\n{}",
@@ -436,22 +441,17 @@ pub fn build_turn_prompt(
             hierarchy.role_prompt.trim(),
             hierarchy.system_format.trim(),
         );
-        parts.push(system);
+        prompt.push_str(&format!("<|turn>system\n{system}\n<turn|>\n"));
     }
 
-    if is_audio {
-        parts.push(marker.to_string());
+    // Turno user
+    if !user_input.trim().is_empty() || is_audio {
+        prompt.push_str(&format!("<|turn>user\n{user_input}\n{marker}\n<turn|>\n"));
     }
 
-    if !user_input.trim().is_empty() {
-        parts.push(user_input.trim().to_string());
-    }
-
-    let content = parts.join("\n");
-    let prompt = format!("<|turn|>user\n{content}\n<|turn|>\n<|turn|>model\n");
+    // Prefijo de generación del modelo
+    prompt.push_str("<|turn>model\n");
 
     injection.increment();
-    eprint!("Generated prompt:\n{prompt}\n--- End of prompt ---\n");
-
     prompt
 }
