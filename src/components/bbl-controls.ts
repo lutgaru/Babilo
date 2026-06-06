@@ -12,6 +12,9 @@ import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 export class BblControls extends withI18n(LitElement) {
   @property({ type: Boolean }) recording = false;
 
+  /** When true, only show hangup and transcript toggle (for text-only modes) */
+  @property({ type: Boolean }) textMode = false;
+
   /** Mirrors the transcript panel state — drives the icon's active style */
   @property({ type: Boolean }) transcriptOpen = true;
 
@@ -59,6 +62,7 @@ export class BblControls extends withI18n(LitElement) {
         <div class="flex items-center justify-center gap-[14px]">
 
           <!-- Mute button -->
+          ${!this.textMode ? html`
           <button
             title="${this._t('controls.mute')}"
             class="
@@ -121,6 +125,7 @@ export class BblControls extends withI18n(LitElement) {
                     stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/>
             </svg>
           </button>
+          ` : ''}
 
           <!-- Transcript toggle button -->
           <button

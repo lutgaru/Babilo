@@ -290,6 +290,13 @@ export class BblSession extends withI18n(LitElement) {
     // Text mode
     if (accepts_text && !accepts_audio) {
       return html`
+        <bbl-controls
+          ?textMode=${true}
+          .transcriptOpen=${this.transcriptOpen}
+          @transcript-toggle=${() => { this.transcriptOpen = !this.transcriptOpen; }}
+          @hang-up=${this.hangUp}
+          class="flex-shrink-0">
+        </bbl-controls>
         <div class="flex gap-2 px-4 py-3 border-t border-[var(--bbl-border)]">
           <input
             id="text-input"
