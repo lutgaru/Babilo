@@ -12,7 +12,7 @@ import {
   AIState, BabiloAnalysis, SessionInfo,
   SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
-import { endSession, startListening, stopAndProcessStreaming, processTextStreaming } from '../invoke';
+import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, resetContext } from '../invoke';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
@@ -55,6 +55,7 @@ export class BblSession extends withI18n(LitElement) {
     this.hangUp = this.hangUp.bind(this);
     this.toggleRecording = this.toggleRecording.bind(this);
     this._onSettingsOpen = this._onSettingsOpen.bind(this);
+    this._onResetContext = this._onResetContext.bind(this);
   }
 
   connectedCallback() {
@@ -142,6 +143,20 @@ export class BblSession extends withI18n(LitElement) {
         bubbles: true,
         composed: true,
       }));
+    }
+  }
+
+  // ── Reset context — called from bbl-controls @reset-context ──
+  async _onResetContext() {
+    try {
+      await resetContext();
+      this.messages = [];
+      this.response = '';
+      this.score = null;
+      this.corrections = [];
+      this.nextStepHint = null;
+    } catch (e) {
+      console.error('Error resetting context:', e);
     }
   }
 
@@ -295,6 +310,7 @@ export class BblSession extends withI18n(LitElement) {
           .transcriptOpen=${this.transcriptOpen}
           @transcript-toggle=${() => { this.transcriptOpen = !this.transcriptOpen; }}
           @hang-up=${this.hangUp}
+          @reset-context=${this._onResetContext}
           class="flex-shrink-0">
         </bbl-controls>
         <div class="flex gap-2 px-4 py-3 border-t border-[var(--bbl-border)]">
@@ -336,6 +352,7 @@ export class BblSession extends withI18n(LitElement) {
         @mic-toggle=${this.toggleRecording}
         @transcript-toggle=${() => { this.transcriptOpen = !this.transcriptOpen; }}
         @hang-up=${this.hangUp}
+        @reset-context=${this._onResetContext}
         class="flex-shrink-0">
       </bbl-controls>
     `;
