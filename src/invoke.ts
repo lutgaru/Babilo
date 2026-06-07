@@ -65,8 +65,3 @@ export const saveSettings = async (settings: AppSettings): Promise<void> => {
   console.log('[Babilo Mock] Settings saved:', settings);
 };
 
-export const resetContext = async (): Promise<void> => {
-  if (isTauri()) { await tauriInvoke('reset_conversation'); return; }
-  console.log('[Babilo Mock] Context reset');
-  await delay(300);
-};

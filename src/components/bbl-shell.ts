@@ -18,6 +18,7 @@ import './bbl-settings';
 export class BblShell extends withI18n(LitElement) {
   @state() private view: AppView = 'config-list';
   @state() private sessionInfo: SessionInfo | null = null;
+  @state() private sessionPath = '';
   @state() private settingsOpen = false;
 
   // Core startup control states
@@ -76,8 +77,9 @@ export class BblShell extends withI18n(LitElement) {
     if (this.unlistenError) this.unlistenError();
   }
 
-  private onSessionStarted(e: CustomEvent<SessionInfo>) {
-    this.sessionInfo = e.detail;
+  private onSessionStarted(e: CustomEvent<{ info: SessionInfo; path: string }>) {
+    this.sessionInfo = e.detail.info;
+    this.sessionPath = e.detail.path;
     this.view = 'session';
   }
 
@@ -120,6 +122,7 @@ export class BblShell extends withI18n(LitElement) {
       return html`
         <bbl-session
           .sessionInfo=${this.sessionInfo}
+          .modePath=${this.sessionPath}
           .settingsOpen=${this.settingsOpen}
           .selectedMic=${this._selectedMic}
           @settings-open=${this.onSettingsOpen}

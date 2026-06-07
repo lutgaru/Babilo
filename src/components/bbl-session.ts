@@ -12,7 +12,7 @@ import {
   AIState, BabiloAnalysis, SessionInfo,
   SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
-import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, resetContext } from '../invoke';
+import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, startSession } from '../invoke';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
@@ -27,6 +27,9 @@ export class BblSession extends withI18n(LitElement) {
 
   /** Passed down from bbl-shell to keep the gear icon active */
   @property({ type: Boolean }) settingsOpen = false;
+
+  /** Mode file path used to restart the session on reset */
+  @property({ type: String }) modePath = '';
 
   @property({ attribute: false }) selectedMic: string | null = null;
 
@@ -149,7 +152,8 @@ export class BblSession extends withI18n(LitElement) {
   // ── Reset context — called from bbl-controls @reset-context ──
   async _onResetContext() {
     try {
-      await resetContext();
+      await endSession();
+      await startSession(this.modePath);
       this.messages = [];
       this.response = '';
       this.score = null;

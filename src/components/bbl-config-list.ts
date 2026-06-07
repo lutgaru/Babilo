@@ -43,8 +43,8 @@ export class BblConfigList extends withI18n(LitElement) {
     try {
       console.log(`Iniciando modo: ${mode.path}`);
       const info: SessionInfo = await startSession(mode.path);
-      this.dispatchEvent(new CustomEvent<SessionInfo>('session-started', {
-        detail: info,
+      this.dispatchEvent(new CustomEvent<{ info: SessionInfo; path: string }>('session-started', {
+        detail: { info, path: mode.path },
         bubbles: true,
         composed: true,
       }));
