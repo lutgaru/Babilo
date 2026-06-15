@@ -8,11 +8,10 @@
 > [!IMPORTANT]
 > This repository contains the **Core Engine** only. Users are responsible for sourcing and placing their own models (Gemma 4 / Supertonic) from Hugging Face or similar repositories.
 
-
 ## 🛠️ Technical Stack (The Core)
 
 | Component | Technology | Role / Notes |
-| :--- | :--- | :--- |
+| --- | --- | --- |
 | **Backend** | **Rust** | Audio buffer orchestration & memory safety. |
 | **UI Framework** | **Tauri v2** | Lightweight native container (Rust-based). |
 | **Frontend** | **Vite + Lit** | Native Web Components for maximum render speed. |
@@ -25,34 +24,12 @@
 ## 🚀 Architecture & Data Flow
 
 Babilo eliminates friction by removing intermediate models (like Whisper) and going straight from **Voice Input -> Multimodal LLM -> Voice Output**.
+
 1. **Audio Capture:** Handled via Rust streams.
 2. **Processing:** Vulkan-accelerated inference via Gemma 4.
 3. **Privacy:** Zero data leaves your machine. 100% Offline.
 
-
-## 💼 Supporting the Project
-
-Babilo will **always remain fully open source** under the GPLv3 license. Our core belief is that privacy and local-first software should be accessible to everyone.
-
-However, maintaining and improving a high-quality application takes significant time and resources. To make the project sustainable, we are developing a **commercial version** distributed through Steam.
-
-### What to expect from the Steam version:
-- **Plug & Play experience** — One-click installer
-- Automatic model downloading and management
-- Pre-optimized builds for different GPUs
-- Seamless updates
-- Additional voice packs and quality-of-life features
-- Direct support from the developer
-
-This paid version is aimed at users who want convenience and prefer not to compile the project themselves. 
-
-**The source code will always stay free.** You can build Babilo from source at any time if you prefer the fully DIY approach.
-
 ---
-
-**Early Access planned for September 2026.**
-
-We appreciate every form of support — whether by starring the repo, contributing code, or purchasing the Steam version to help sustain development.
 
 ## ⚖️ License
 
@@ -61,59 +38,53 @@ Distributed under the **GPLv3 License**. See `LICENSE` for more information. Bui
 ## 🗺️ Roadmap
 
 ### v0.1 - Core Engine (Current)
-- [x] Rust + Tauri backend
-- [x] llama.cpp + Vulkan integration
-- [x] Multimodal support with Gemma 4
-- [x] Real-time audio capture and playback
-- [x] Supertonic TTS integration
 
-### v0.2 - Early Access (September 2026)
-- [ ] Polished and user-friendly interface
-- [ ] Smooth conversational mode
-- [ ] Initial language support: **Spanish ↔ English**
-- [ ] Stable fully offline experience
-- [ ] Plug & Play Steam version 
+* [x] Rust + Tauri backend
+* [x] llama.cpp + Vulkan integration
+* [x] Multimodal support with Gemma 4
+* [x] Real-time audio capture and playback
+* [x] Supertonic TTS integration
+
+### v0.2 - Community Focus (September 2026)
+
+* [ ] Polished and user-friendly interface
+* [ ] Smooth conversational mode
+* [ ] Initial language support: **Spanish ↔ English**
+* [ ] Streamlined local setup/documentation
+* [ ] Community-driven model configurations
 
 ### v0.3 - Q4 2026
-- [ ] Additional languages (French, German, Portuguese, Japanese, etc.)
-- [ ] Advanced pronunciation feedback and correction
-- [ ] Immersion mode (voice-only)
+
+* [ ] Additional languages (French, German, Portuguese, Japanese, etc.)
+* [ ] Advanced pronunciation feedback and correction
+* [ ] Immersion mode (voice-only)
 
 ### v1.0 - Stable Release (2027)
-- [ ] Progress export and statistics
-- [ ] Support for multiple local models
-- [ ] Community voice pack sharing
-- [ ] Improved Linux & macOS support
 
-### Future (Beyond v1.0)
-- Larger local model support
-- Integration with Anki and other tools
-- Multiplayer guided conversations
-- Tools for teachers and self-learners
-- Structured lessons and progress system
+* [ ] Progress export and statistics
+* [ ] Support for multiple local models
+* [ ] Community voice pack sharing
+* [ ] Improved Linux & macOS support
 
----
-
-**Note:** This roadmap is public and subject to change based on community feedback and priorities. We value **quality and low latency** over rapid feature addition.
 
 ## 🤝 Contributing & Feedback
 
-We welcome genuine contributions and feedback! Babilo is still in early development, but if you're passionate about the project, feel free to get involved.
+Babilo is a **community-first, open-source project**. We believe that high-quality language learning tools should be accessible to everyone and transparent in their operation. We welcome contributors who share our passion for local-first AI and privacy.
 
-### How to contribute:
-- **News & Updates**: Stay tuned for the latest announcements and project news in our [Telegram channel](https://t.me/babilo_official). 
-- **Issues**: This is the place for **feedback, ideas, and bug reports**. Please open an issue first to discuss any change or feature you want to work on.
-- **Pull Requests**: We maintain **high standards** for code quality.
+### How to get involved:
+
+* **News & Updates**: Join our [Telegram channel](https://t.me/babilo_official) to discuss development.
+* **Issues**: Use this space for **feedback, ideas, and bug reports**.
+* **Pull Requests**: We maintain **high standards** for code quality.
 
 ### What we expect from PRs:
-- **Full Understanding**: You must fully understand the code you submit.
-- **Atomic Changes**: Small, focused improvements (quality over quantity).
-- **Clear Context**: A clear explanation of *why* the change is needed.
-- **Human Oversight**: No un-reviewed AI-generated code.
 
-All serious contributors will be properly credited in the future.
+* **Full Understanding**: You must fully understand the code you submit.
+* **Atomic Changes**: Small, focused improvements (quality over quantity).
+* **Clear Context**: A clear explanation of *why* the change is needed.
+* **Human Oversight**: No un-reviewed AI-generated code.
 
-Thank you in advance to everyone who helps make Babilo better ❤️
+Thank you to everyone who helps make Babilo better ❤️
 
 
 ## 🏗️ Getting Started (For Devs)
