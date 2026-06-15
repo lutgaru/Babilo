@@ -137,13 +137,21 @@ export const mockSettings: AppSettings = {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Emit a mock ai-state event (mirrors backend babilo://ai-state) */
+function emitAiState(state: 'thinking' | 'speaking' | 'idle') {
+    window.dispatchEvent(new CustomEvent('babilo://ai-state', { detail: { payload: state } }));
+}
+
 /**
  * Simula la emisión secuencial de eventos simulando el backend de Rust + Vulkan
  */
 export const simulateRustStream = async (prompt: string): Promise<void> => {
     console.log(`[Babilo Engine Mock] Analizando prompt: "${prompt}"...`);
 
+    emitAiState('thinking');
     await delay(100);
+
+    emitAiState('speaking');
     const sentinelEvent: StreamEvent = {
         type: 'sentinel_reached'
     };
@@ -151,11 +159,10 @@ export const simulateRustStream = async (prompt: string): Promise<void> => {
 
     await delay(1000);
 
+    emitAiState('idle');
     const analysisEvent: StreamEvent = {
         type: 'analysis',
         data: mockAnalysisExamples[0]
     };
     window.dispatchEvent(new CustomEvent('babilo://stream', { detail: { payload: analysisEvent } }));
-
-
 };

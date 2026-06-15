@@ -9,7 +9,7 @@ import { property, state, customElement } from 'lit/decorators.js';
 import { withI18n } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
-  AIState, BabiloAnalysis, SessionInfo,
+  AIState, AiStateEvent, BabiloAnalysis, SessionInfo,
   SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
 import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, startSession } from '../invoke';
@@ -49,6 +49,7 @@ export class BblSession extends withI18n(LitElement) {
 
   private _timerInterval: ReturnType<typeof setInterval> | null = null;
   private _unlistenStream: UnlistenFn | null = null;
+  private _unlistenAiState: UnlistenFn | null = null;
 
   static styles = css`:host { display: block; }`;
 
@@ -65,6 +66,9 @@ export class BblSession extends withI18n(LitElement) {
     super.connectedCallback();
     if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
 
+    // Listen for backend-driven state changes (source of truth for AI state)
+    this._setupAiStateListener();
+
     // If the mode speaks first, show the opening line immediately
     if (this.sessionInfo.caps.llm_initiates) {
       this.aiState = 'thinking';
@@ -72,14 +76,15 @@ export class BblSession extends withI18n(LitElement) {
       // Register stream listener to capture user response events
       this._setupStreamListener();
 
-      // After showing it, return to idle so the user can respond
-      setTimeout(() => { this.aiState = 'idle'; }, 1200);
+      // Backend will drive the full cycle: thinking → speaking → idle
+      // via babilo://ai-state events emitted from run_turn_streaming
     }
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this._cleanupStreamListener();
+    this._cleanupAiStateListener();
     this.stopTimer();
   }
 
@@ -112,6 +117,43 @@ export class BblSession extends withI18n(LitElement) {
     if (this._unlistenStream) {
       this._unlistenStream();
       this._unlistenStream = null;
+    }
+  }
+
+  /**
+   * Listen for backend-driven AI state changes.
+   * Backend is the source of truth — these events override any optimistic
+   * frontend state to keep everything in sync (especially after TTS finishes).
+   */
+  private _setupAiStateListener() {
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
+
+    const onState = (state: AiStateEvent) => {
+      this.aiState = state;
+    };
+
+    if (isTauri) {
+      listen('babilo://ai-state', ({ payload }) => {
+        onState(payload as AiStateEvent);
+      }).then(fn => {
+        this._unlistenAiState = fn;
+      }).catch(err => {
+        console.error('Error setting up ai-state listener:', err);
+      });
+    } else {
+      const mockHandler = (e: Event) => {
+        const detail = (e as CustomEvent).detail;
+        if (detail?.payload) onState(detail.payload as AiStateEvent);
+      };
+      window.addEventListener('babilo://ai-state', mockHandler);
+      this._unlistenAiState = () => window.removeEventListener('babilo://ai-state', mockHandler);
+    }
+  }
+
+  private _cleanupAiStateListener() {
+    if (this._unlistenAiState) {
+      this._unlistenAiState();
+      this._unlistenAiState = null;
     }
   }
 
@@ -235,7 +277,7 @@ export class BblSession extends withI18n(LitElement) {
           analysis: event.data,
           timestamp: Date.now(),
         }];
-        this.aiState = 'idle';
+        // AI state is now driven by backend via babilo://ai-state events
         break;
 
       case 'error':

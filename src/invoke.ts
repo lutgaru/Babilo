@@ -31,8 +31,7 @@ export const stopAndProcessStreaming = async (prompt: string): Promise<any> => {
 
 export const processTextStreaming = async (prompt: string): Promise<any> => {
   if (isTauri()) return tauriInvoke('process_text_streaming', { prompt });
-  console.log(`[Babilo Mock] processTextStreaming con prompt: "${prompt}"`);
-  await delay(500);
+  simulateRustStream(prompt);
   return { success: true };
 };
 

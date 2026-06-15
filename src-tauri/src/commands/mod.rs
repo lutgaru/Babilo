@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use crate::{
     audio::capture::AudioCapture, audio::list_input_devices, config::settings_loader::SettingsLoader,
-    errors::AppError, modes::ModeFileInfo, schemas::PersistentSettings, state::AppState,
+    errors::AppError, modes::ModeFileInfo, schemas::{AiState, PersistentSettings}, state::AppState,
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -65,11 +65,9 @@ pub async fn start_session(
     };
 
     if let Some(prompt) = turn_prompt {
-        state
-            .session_manager
-            .lock()
-            .map_err(|e| e.to_string())?
-            .run_turn_streaming(None, prompt, app);
+        let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
+        manager.set_ai_state(AiState::Thinking, Some(&app));
+        manager.run_turn_streaming(None, prompt, app);
     }
 
     Ok(session_info)
@@ -102,6 +100,7 @@ pub fn list_audio_devices() -> Result<Vec<AudioDevice>, String> {
 pub fn start_listening(
     device_name: Option<String>,
     state: State<'_, AppState>,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     let mut capture = match device_name.as_deref() {
         Some(name) => AudioCapture::with_device_name(name),
@@ -122,6 +121,9 @@ pub fn start_listening(
     if let Ok(mut hz) = state.sample_rate.lock() {
         *hz = sample_rate;
     }
+
+    let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
+    manager.set_ai_state(AiState::Listening, Some(&app));
 
     Ok(())
 }
@@ -158,6 +160,7 @@ pub async fn stop_and_process_streaming(
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
         let fullprompt = manager.get_turn_prompt(&prompt, true).unwrap_or_default();
+        manager.set_ai_state(AiState::Thinking, Some(&app));
         manager.run_turn_streaming(Some(resampled), fullprompt, app);
     }
 
@@ -175,6 +178,7 @@ pub async fn process_text_streaming(
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
         let fullprompt = manager.get_turn_prompt(&prompt, false).unwrap_or_default();
+        manager.set_ai_state(AiState::Thinking, Some(&app));
         manager.run_turn_streaming(None, fullprompt, app);
     }
 

@@ -65,6 +65,9 @@ export type StreamEvent =
   }
   | { type: 'error'; message: string };
 
+/** Backend-driven AI state event payload — matches Rust AiState enum */
+export type AiStateEvent = 'idle' | 'listening' | 'thinking' | 'speaking';
+
 export type AppView = 'config-list' | 'session';
 
 // ── Settings (mirrors Rust PersistentSettings) ──

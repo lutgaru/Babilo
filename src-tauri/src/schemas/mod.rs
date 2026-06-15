@@ -75,3 +75,12 @@ pub enum BabiloEvent {
     Analysis { data: BabiloAnalysis },
     Error { message: String },
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AiState {
+    Idle,
+    Listening,
+    Thinking,
+    Speaking,
+}

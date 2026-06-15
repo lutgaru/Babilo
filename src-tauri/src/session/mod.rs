@@ -21,10 +21,10 @@ use uuid::Uuid;
 
 use crate::{
     errors::{AppResult, SessionError},
-    llama::InferenceEngine, // adjust to your actual types
+    llama::InferenceEngine,
     modes::{load_mode, ModeConfig},
-    schemas::{master_system_instruction, BabiloAnalysis, BabiloEvent, TokenEvent},
-    tts::TtsEngine, // adjust to your actual types
+    schemas::{master_system_instruction, AiState, BabiloAnalysis, BabiloEvent, TokenEvent},
+    tts::TtsEngine,
 };
 
 // ─── Session States ─────────────────────────────────────────
@@ -113,6 +113,8 @@ pub struct SessionManager {
     // without holding a borrow on SessionManager itself.
     pub llm_engine: Arc<Mutex<Option<InferenceEngine>>>,
     pub tts_engine: Arc<Mutex<Option<TtsEngine>>>,
+    /// Source of truth for the AI state across the entire app.
+    ai_state: Arc<Mutex<AiState>>,
 }
 
 impl SessionManager {
@@ -121,12 +123,32 @@ impl SessionManager {
             active_session: None,
             llm_engine: Arc::new(Mutex::new(None)),
             tts_engine: Arc::new(Mutex::new(None)),
+            ai_state: Arc::new(Mutex::new(AiState::Idle)),
         }
     }
 
     pub fn load_engines(&mut self, llm: Option<InferenceEngine>, tts: Option<TtsEngine>) {
         *self.llm_engine.lock().unwrap() = llm;
         *self.tts_engine.lock().unwrap() = tts;
+    }
+
+    /// Update the AI state and emit a Tauri event so the frontend stays in sync.
+    /// Pass `None` for `app` when no event emission is needed.
+    pub fn set_ai_state(&self, state: AiState, app: Option<&tauri::AppHandle>) {
+        *self.ai_state.lock().unwrap() = state;
+        if let Some(app) = app {
+            let _ = app.emit("babilo://ai-state", &state);
+        }
+    }
+
+    /// Read the current AI state without emitting an event.
+    pub fn get_ai_state(&self) -> AiState {
+        *self.ai_state.lock().unwrap()
+    }
+
+    /// Clone the inner Arc so spawned threads can track state on their own.
+    pub fn ai_state_arc(&self) -> Arc<Mutex<AiState>> {
+        Arc::clone(&self.ai_state)
     }
 
     // ── Session lifecycle ────────────────────────────────────
@@ -260,6 +282,17 @@ impl SessionManager {
     ) {
         let llm_engine = Arc::clone(&self.llm_engine);
         let tts_engine = Arc::clone(&self.tts_engine);
+        let ai_state = Arc::clone(&self.ai_state);
+
+        // Clone app handle so the state-change closure can own it independently
+        // from the `emit` closure used inside spawn_blocking.
+        let app_for_state = app.clone();
+        let ai_state_changed = move |state: AiState| {
+            *ai_state.lock().unwrap() = state;
+            let _ = app_for_state.emit("babilo://ai-state", &state);
+        };
+
+        ai_state_changed(AiState::Thinking);
 
         tauri::async_runtime::spawn_blocking(move || {
             let emit = |event: BabiloEvent| {
@@ -279,11 +312,18 @@ impl SessionManager {
                 }
             });
 
+            // Stores the deferred result so we can join TTS before emitting
+            let mut deferred_analysis: Option<Result<BabiloAnalysis, String>> = None;
+            let mut has_errored = false;
+
             let mut llm_lock = llm_engine.lock().unwrap();
             match llm_lock.as_mut() {
-                None => emit(BabiloEvent::Error {
-                    message: "LLM not initialized".into(),
-                }),
+                None => {
+                    emit(BabiloEvent::Error {
+                        message: "LLM not initialized".into(),
+                    });
+                    has_errored = true;
+                }
                 Some(model) => {
                     if model.model().context_is_full(model.state().n_past, 256) {
                         let _ = model.reset();
@@ -304,7 +344,7 @@ impl SessionManager {
                                     let _ = tx.send(partial);
                                 }
                             }
-                            eprint!("Sentinel reached. Switching to analysis phase.\n");
+                            ai_state_changed(AiState::Speaking);
                             emit(BabiloEvent::SentinelReached);
                         }
                         TokenEvent::AnalysisToken(text) => {
@@ -314,21 +354,15 @@ impl SessionManager {
                             drop(tts_tx_opt.take());
                             let final_response = response_buf.trim().to_string();
                             if final_response.is_empty() {
-                                emit(BabiloEvent::Error {
-                                    message: "Empty response from model".into(),
-                                });
+                                deferred_analysis = Some(Err("Empty response from model".into()));
                                 return;
                             }
-                            match BabiloAnalysis::builder()
+                            let result = BabiloAnalysis::builder()
                                 .with_response(final_response)
                                 .with_json_payload(&analysis_buf)
                                 .and_then(|b| b.build())
-                            {
-                                Ok(data) => emit(BabiloEvent::Analysis { data }),
-                                Err(e) => emit(BabiloEvent::Error {
-                                    message: e.to_string(),
-                                }),
-                            }
+                                .map_err(|e| e.to_string());
+                            deferred_analysis = Some(result);
                         }
                     };
 
@@ -338,14 +372,33 @@ impl SessionManager {
                     };
 
                     if let Err(e) = result {
-                        emit(BabiloEvent::Error {
-                            message: e.to_string(),
-                        });
+                        deferred_analysis = Some(Err(e.to_string()));
                     }
                 }
             }
 
+            // ── KEY FIX: Wait for TTS to finish before emitting analysis ──
             let _ = tts_handle.join();
+
+            if has_errored {
+                ai_state_changed(AiState::Idle);
+                return;
+            }
+
+            match deferred_analysis {
+                Some(Ok(data)) => {
+                    emit(BabiloEvent::Analysis { data });
+                    ai_state_changed(AiState::Idle);
+                }
+                Some(Err(msg)) => {
+                    emit(BabiloEvent::Error { message: msg });
+                    ai_state_changed(AiState::Idle);
+                }
+                None => {
+                    // Inference didn't produce any terminal event — shouldn't happen
+                    ai_state_changed(AiState::Idle);
+                }
+            }
         });
     }
 
