@@ -61,6 +61,7 @@ pub fn run() {
                 .expect("Failed to write default settings");
             let app_cfg = persistent.clone().into_app_config();
             let inference_cfg: config::InferenceConfig = persistent.inference().clone().into();
+            let analysis_cfg = app_cfg.analysis.clone();
             let llm_cfg = app_cfg.llm.clone();
 
             // Set up global state with loaded configuration
@@ -96,7 +97,7 @@ pub fn run() {
                         None
                     };
 
-                    match llama::LlmModel::new(&model_path, mmproj, llm_cfg, inference_cfg) {
+                    match llama::LlmModel::new(&model_path, mmproj, llm_cfg, inference_cfg, analysis_cfg) {
                         Ok(model) => Some(llama::InferenceEngine::new(model)),
                         Err(e) => {
                             eprintln!("❌ Failed to load LLM: {}", e);

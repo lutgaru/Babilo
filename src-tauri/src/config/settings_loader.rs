@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::GuiConfig;
 use crate::errors::SettingsError;
 
-use super::{AppConfig, AudioConfig, InferenceConfig, LlmConfig, SeedOption};
+use super::{AnalysisConfig, AppConfig, AudioConfig, InferenceConfig, LlmConfig, SeedOption};
 
 // ---------------------------------------------------------------------------
 // PersistentSettings – full serde copy of all config groups
@@ -29,6 +29,8 @@ pub struct PersistentSettings {
     pub audio: PersistentAudioConfig,
     pub llm: PersistentLlmConfig,
     pub inference: PersistentInferenceConfig,
+    #[serde(default)]
+    pub analysis: PersistentAnalysisConfig,
     pub tts: Option<PersistentTtsConfig>,
     pub gui: PersistentGuiConfig,
 }
@@ -40,6 +42,7 @@ impl PersistentSettings {
         AppConfig {
             audio: self.audio.into(),
             llm: self.llm.into(),
+            analysis: self.analysis.into(),
             tts: self.tts.map(PersistentTtsConfig::into_tts),
             gui: self.gui.into(),
         }
@@ -52,6 +55,7 @@ impl PersistentSettings {
             audio: cfg.audio.into(),
             llm: cfg.llm.into(),
             inference: inference.into(),
+            analysis: cfg.analysis.into(),
             tts: cfg.tts.map(PersistentTtsConfig::from_tts),
             gui: PersistentGuiConfig::from(cfg.gui),
         }
@@ -196,6 +200,53 @@ impl From<PersistentInferenceConfig> for InferenceConfig {
 impl From<InferenceConfig> for PersistentInferenceConfig {
     fn from(c: InferenceConfig) -> Self {
         PersistentInferenceConfig {
+            temperature: c.temperature,
+            top_p: c.top_p,
+            top_k: c.top_k,
+            seed_option: c.seed_option,
+            seed_value: c.seed_value,
+        }
+    }
+}
+
+// -- Analysis ---------------------------------------------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PersistentAnalysisConfig {
+    pub context_size: u32,
+    pub max_output_tokens: usize,
+    pub temperature: f32,
+    pub top_p: f32,
+    pub top_k: i32,
+    pub seed_option: SeedOption,
+    pub seed_value: u32,
+}
+
+impl Default for PersistentAnalysisConfig {
+    fn default() -> Self {
+        AnalysisConfig::default().into()
+    }
+}
+
+impl From<PersistentAnalysisConfig> for AnalysisConfig {
+    fn from(p: PersistentAnalysisConfig) -> Self {
+        AnalysisConfig {
+            context_size: p.context_size,
+            max_output_tokens: p.max_output_tokens,
+            temperature: p.temperature,
+            top_p: p.top_p,
+            top_k: p.top_k,
+            seed_option: p.seed_option,
+            seed_value: p.seed_value,
+        }
+    }
+}
+
+impl From<AnalysisConfig> for PersistentAnalysisConfig {
+    fn from(c: AnalysisConfig) -> Self {
+        PersistentAnalysisConfig {
+            context_size: c.context_size,
+            max_output_tokens: c.max_output_tokens,
             temperature: c.temperature,
             top_p: c.top_p,
             top_k: c.top_k,

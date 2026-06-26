@@ -11,7 +11,7 @@
 //! Gestión del modelo llama.cpp: carga, contexto, configuración
 
 use crate::{
-    config::{InferenceConfig, LlmConfig},
+    config::{AnalysisConfig, InferenceConfig, LlmConfig},
     errors::{AppError, LlmError},
 };
 use llama_cpp_2::{
@@ -50,6 +50,7 @@ pub fn get_backend() -> &'static LlamaBackend {
 struct Inner {
     // ctx ANTES de model → se dropea primero (drop order inverso al de declaración)
     ctx: Option<LlamaContext<'static>>,
+    analysis_ctx: Option<LlamaContext<'static>>,
     model: LlamaModel,
     mtmd_context: Option<MtmdContext>,
 }
@@ -57,8 +58,10 @@ struct Inner {
 pub struct LlmModel {
     inner: Pin<Box<Inner>>,
     ctx_params: LlamaContextParams,
+    analysis_ctx_params: LlamaContextParams,
     config: LlmConfig,
     inference_config: InferenceConfig,
+    analysis_config: AnalysisConfig,
     audio_embed_dim: usize,
 }
 
@@ -71,6 +74,7 @@ impl LlmModel {
         mmproj_path: Option<&Path>,
         config: LlmConfig,
         inference_config: InferenceConfig,
+        analysis_config: AnalysisConfig,
     ) -> Result<Self, AppError> {
         let backend = get_backend();
 
@@ -83,6 +87,13 @@ impl LlmModel {
             .with_n_ctx(std::num::NonZeroU32::new(config.context_size))
             .with_n_batch(config.batch_size)
             .with_n_ubatch(config.ubatch_size)
+            .with_n_seq_max(1)
+            .with_embeddings(true);
+
+        let analysis_ctx_params = LlamaContextParams::default()
+            .with_n_ctx(std::num::NonZeroU32::new(analysis_config.context_size))
+            .with_n_batch(256)
+            .with_n_ubatch(128)
             .with_n_seq_max(1)
             .with_embeddings(true);
 
@@ -101,6 +112,7 @@ impl LlmModel {
         // new_context() guarda el puntero interno.
         let mut inner = Box::new(Inner {
             ctx: None,
+            analysis_ctx: None,
             model,
             mtmd_context,
         });
@@ -114,21 +126,30 @@ impl LlmModel {
             .map_err(|e| LlmError::ContextInit(e.to_string()))?;
         inner.ctx = Some(unsafe { std::mem::transmute(ctx_raw) });
 
+        // Create analysis context (small, for single-turn analysis)
+        let analysis_ctx_raw = inner
+            .model
+            .new_context(backend, analysis_ctx_params.clone())
+            .map_err(|e| LlmError::ContextInit(e.to_string()))?;
+        inner.analysis_ctx = Some(unsafe { std::mem::transmute(analysis_ctx_raw) });
+
         Ok(Self {
             inner: Pin::new(inner),
             ctx_params,
+            analysis_ctx_params,
             config,
             inference_config: inference_config.clone(),
+            analysis_config,
             audio_embed_dim: 2304,
         })
     }
 
-    /// Recrea el contexto (resetea KV cache para nueva conversación).
+    /// Recrea el contexto principal (resetea KV cache para nueva conversación).
+    /// No afecta al análisis context.
     pub fn reset_context(&mut self) -> Result<(), AppError> {
         // SAFETY: no movemos Inner, solo mutamos su contenido.
         let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
 
-        // Dropear ctx viejo ANTES de crear el nuevo
         inner.ctx = None;
 
         let ctx_raw = inner
@@ -140,12 +161,41 @@ impl LlmModel {
         Ok(())
     }
 
-    /// Borrow mutable del contexto con lifetime correcto.
+    /// Recrea el contexto de análisis (resetea KV cache para cada turno).
+    pub fn reset_analysis_context(&mut self) -> Result<(), AppError> {
+        // SAFETY: no movemos Inner, solo mutamos su contenido.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
+
+        inner.analysis_ctx = None;
+
+        let ctx_raw = inner
+            .model
+            .new_context(get_backend(), self.analysis_ctx_params.clone())
+            .map_err(|e| LlmError::ContextInit(e.to_string()))?;
+
+        inner.analysis_ctx = Some(unsafe { std::mem::transmute(ctx_raw) });
+        Ok(())
+    }
+
+    /// Borrow mutable del contexto principal con lifetime correcto.
     pub fn ctx_mut(&mut self) -> Result<&mut LlamaContext<'_>, AppError> {
         // SAFETY: no movemos Inner, solo tomamos referencia mutable a ctx.
         let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
         inner
             .ctx
+            .as_mut()
+            .map(|c| unsafe {
+                std::mem::transmute::<&mut LlamaContext<'static>, &mut LlamaContext<'_>>(c)
+            })
+            .ok_or_else(|| LlmError::NotInitialized.into())
+    }
+
+    /// Borrow mutable del contexto de análisis.
+    pub fn analysis_ctx_mut(&mut self) -> Result<&mut LlamaContext<'_>, AppError> {
+        // SAFETY: no movemos Inner, solo tomamos referencia mutable a analysis_ctx.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
+        inner
+            .analysis_ctx
             .as_mut()
             .map(|c| unsafe {
                 std::mem::transmute::<&mut LlamaContext<'static>, &mut LlamaContext<'_>>(c)
@@ -172,9 +222,17 @@ impl LlmModel {
         Ok((ctx_ref, mtmd))
     }
 
-    /// Tamaño del contexto en tokens.
+    /// Tamaño del contexto principal en tokens.
     pub fn n_ctx(&self) -> u32 {
         self.ctx_params.n_ctx().map(|n| n.get()).unwrap_or(4096)
+    }
+
+    /// Tamaño del contexto de análisis en tokens.
+    pub fn analysis_n_ctx(&self) -> u32 {
+        self.analysis_ctx_params
+            .n_ctx()
+            .map(|n| n.get())
+            .unwrap_or(2000)
     }
 
     /// Verifica si agregar `needed` tokens llenaría el contexto.
@@ -199,6 +257,10 @@ impl LlmModel {
     }
     pub fn inference_config(&self) -> &InferenceConfig {
         &self.inference_config
+    }
+
+    pub fn analysis_config(&self) -> &AnalysisConfig {
+        &self.analysis_config
     }
 
     pub fn mtmd_context(&self) -> Option<&MtmdContext> {

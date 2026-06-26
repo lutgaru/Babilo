@@ -65,8 +65,33 @@ impl Default for LlmConfig {
             context_size: 4096,
             batch_size: 2048,
             ubatch_size: 512,
-            n_gpu_layers: 99, // Offload máximo a GPU
+            n_gpu_layers: 99,
             max_output_tokens: 10000,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AnalysisConfig {
+    pub context_size: u32,
+    pub max_output_tokens: usize,
+    pub temperature: f32,
+    pub top_p: f32,
+    pub top_k: i32,
+    pub seed_option: SeedOption,
+    pub seed_value: u32,
+}
+
+impl Default for AnalysisConfig {
+    fn default() -> Self {
+        Self {
+            context_size: 2000,
+            max_output_tokens: 512,
+            temperature: 0.3,
+            top_p: 0.8,
+            top_k: 10,
+            seed_option: SeedOption::Random,
+            seed_value: 7,
         }
     }
 }
@@ -147,6 +172,7 @@ impl TtsConfig {
 pub struct AppConfig {
     pub audio: AudioConfig,
     pub llm: LlmConfig,
+    pub analysis: AnalysisConfig,
     pub tts: Option<TtsConfig>,
     pub gui: GuiConfig,
 }
@@ -156,7 +182,8 @@ impl Default for AppConfig {
         Self {
             audio: AudioConfig::default(),
             llm: LlmConfig::default(),
-            tts: None, // Se carga desde tts.json en runtime
+            analysis: AnalysisConfig::default(),
+            tts: None,
             gui: GuiConfig::default(),
         }
     }

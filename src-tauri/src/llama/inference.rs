@@ -13,10 +13,10 @@
 use std::time::SystemTime;
 
 use crate::{
-    config::{InferenceConfig, LlmConfig, SeedOption},
+    config::{AnalysisConfig, InferenceConfig, LlmConfig, SeedOption},
     errors::{AppError, LlmError},
     llama::model::LlmModel,
-    schemas::{TokenEvent, SENTINEL},
+    schemas::TokenEvent,
 };
 use llama_cpp_2::{
     context::LlamaContext,
@@ -27,19 +27,11 @@ use llama_cpp_2::{
     token::LlamaToken,
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Estado
-// ─────────────────────────────────────────────────────────────────────────────
-
 #[derive(Default)]
 pub struct InferenceState {
     pub n_past: i32,
     pub system_prompt_evaluated: bool,
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Motor
-// ─────────────────────────────────────────────────────────────────────────────
 
 pub struct InferenceEngine {
     model: LlmModel,
@@ -54,14 +46,13 @@ impl InferenceEngine {
         }
     }
 
-    // ── API pública ───────────────────────────────────────────────────────────
+    // ── Response inference (uses main 200k context) ──────────
 
-    // inference.rs — fix infer_audio_streaming: eval_chunks + closure callback
     pub fn infer_audio_streaming(
         &mut self,
         audio_pcm: &[f32],
         prompt: &str,
-        on_token: impl FnMut(TokenEvent), // ← closure, not Sender
+        on_token: impl FnMut(TokenEvent),
     ) -> Result<(), AppError> {
         let add_special = !self.state.system_prompt_evaluated;
         let audio_bitmap = MtmdBitmap::from_audio_data(audio_pcm)
@@ -93,7 +84,6 @@ impl InferenceEngine {
 
         ensure_context_space(ctx, &mut self.state, n_ctx, total_tokens)?;
 
-        // ← was missing in the broken version
         let new_n_past = chunks
             .eval_chunks(mtmd, ctx, self.state.n_past, 0, 512, true)
             .map_err(|e| LlmError::Decode(e.to_string()))?;
@@ -101,7 +91,7 @@ impl InferenceEngine {
         self.state.n_past = new_n_past;
         self.state.system_prompt_evaluated = true;
 
-        generate_babilo_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
+        generate_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
 
         Ok(())
     }
@@ -130,13 +120,46 @@ impl InferenceEngine {
 
         self.state.system_prompt_evaluated = true;
 
-        generate_babilo_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
+        generate_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
+
+        Ok(())
+    }
+
+    // ── Analysis inference (uses small 2k context, reset each turn) ──
+
+    pub fn infer_analysis_streaming(
+        &mut self,
+        analysis_prompt: &str,
+        on_token: impl FnMut(TokenEvent),
+    ) -> Result<(), AppError> {
+        self.model.reset_analysis_context()?;
+
+        let analysis_config = self.model.analysis_config().clone();
+        let config = self.model.config().clone();
+        let n_ctx = self.model.analysis_n_ctx();
+
+        let tokens = self
+            .model
+            .model()
+            .str_to_token(analysis_prompt, AddBos::Always)
+            .map_err(|e| LlmError::Tokenization(e.to_string()))?;
+
+        if tokens.len() > n_ctx as usize {
+            return Err(LlmError::ContextFull.into());
+        }
+
+        let ctx = self.model.analysis_ctx_mut()?;
+        let mut analysis_state = InferenceState::default();
+        decode_tokens(ctx, &mut analysis_state, &tokens)?;
+
+        generate_streaming(ctx, &mut analysis_state, &config, &analysis_config, on_token)?;
 
         Ok(())
     }
 
     pub fn reset(&mut self) -> Result<(), AppError> {
         self.model.reset_context()?;
+        self.model.reset_analysis_context()?;
         self.state = InferenceState::default();
         Ok(())
     }
@@ -147,13 +170,15 @@ impl InferenceEngine {
     pub fn model(&self) -> &LlmModel {
         &self.model
     }
+    pub fn model_mut(&mut self) -> &mut LlmModel {
+        &mut self.model
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Funciones libres — reciben componentes separados para evitar borrow conflicts
+// Free functions
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Limpia KV cache si el contexto está lleno.
 fn ensure_context_space(
     ctx: &mut LlamaContext<'_>,
     state: &mut InferenceState,
@@ -161,10 +186,6 @@ fn ensure_context_space(
     new_tokens: usize,
 ) -> Result<(), AppError> {
     const MARGIN: i32 = 256;
-    eprintln!(
-        "Checking context space: n_past={}, new_tokens={}, n_ctx={}, percent_used={:.2}%",
-        state.n_past, new_tokens, n_ctx, (state.n_past + new_tokens as i32) as f64 / n_ctx as f64 * 100.0
-    );
     if state.n_past + new_tokens as i32 + MARGIN > n_ctx as i32 {
         ctx.clear_kv_cache();
         state.n_past = 0;
@@ -173,7 +194,6 @@ fn ensure_context_space(
     Ok(())
 }
 
-/// Decodifica un bloque de tokens prompt en el contexto.
 fn decode_tokens(
     ctx: &mut LlamaContext<'_>,
     state: &mut InferenceState,
@@ -196,12 +216,14 @@ fn decode_tokens(
     Ok(())
 }
 
-//generate a especific streaming response, with detection of the sentinel to separate response from analysis.
-fn generate_babilo_streaming<F>(
+/// Simplified streaming generator — no sentinel, no analysis split.
+/// Emits TokenEvent::Token(text) for each generated token,
+/// then TokenEvent::Done when EOG is reached.
+fn generate_streaming<F>(
     ctx: &mut LlamaContext<'_>,
     state: &mut InferenceState,
     config: &LlmConfig,
-    inference_config: &InferenceConfig,
+    inference_config: &dyn HasSamplerParams,
     mut on_token: F,
 ) -> Result<String, AppError>
 where
@@ -209,18 +231,16 @@ where
 {
     let model = ctx.model;
 
-    let seed = resolve_seed(inference_config);
+    let seed = resolve_seed(inference_config.seed_option(), inference_config.seed_value());
 
     let mut sampler = LlamaSampler::chain_simple([
-        LlamaSampler::top_k(inference_config.top_k),
-        LlamaSampler::top_p(inference_config.top_p, 1),
-        LlamaSampler::temp(inference_config.temperature),
+        LlamaSampler::top_k(inference_config.top_k()),
+        LlamaSampler::top_p(inference_config.top_p(), 1),
+        LlamaSampler::temp(inference_config.temperature()),
         LlamaSampler::dist(seed),
     ]);
 
     let mut output_bytes = Vec::new();
-    let mut sentinel_buf = String::new(); // lookahead buffer for sentinel detection
-    let mut sentinel_found = false;
     let mut batch = LlamaBatch::new(1, 1);
 
     for _ in 0..config.max_output_tokens {
@@ -230,45 +250,13 @@ where
 
         if new_token == model.token_eos() || model.is_eog_token(new_token) {
             on_token(TokenEvent::Done);
-            eprintln!("EOG token reached, stopping generation.");
             break;
         }
 
         if let Ok(bytes) = model.token_to_piece_bytes(new_token, 256, true, None) {
-            let piece = String::from_utf8_lossy(&bytes).to_string();
             output_bytes.extend_from_slice(&bytes);
-
-            if sentinel_found {
-                // ── Analysis phase ────────────────────────────────────────
-                on_token(TokenEvent::AnalysisToken(piece));
-            } else {
-                // ── Response phase: watch for sentinel ────────────────────
-                sentinel_buf.push_str(&piece);
-
-                if sentinel_buf.contains(SENTINEL) {
-                    // Split: flush whatever came before sentinel to TTS
-                    let (before, _) = sentinel_buf.split_once(SENTINEL).unwrap();
-                    if !before.is_empty() {
-                        on_token(TokenEvent::ResponseToken(before.to_string()));
-                    }
-                    on_token(TokenEvent::SentinelReached);
-                    sentinel_found = true;
-                    sentinel_buf.clear();
-                } else if sentinel_buf.len() > SENTINEL.len() {
-                    let mut safe_len = sentinel_buf.len() - SENTINEL.len();
-                    // retroceder hasta encontrar un límite válido
-                    while safe_len > 0 && !sentinel_buf.is_char_boundary(safe_len) {
-                        safe_len -= 1;
-                    }
-
-                    if safe_len > 0 {
-                        let flushed = sentinel_buf[..safe_len].to_string();
-                        sentinel_buf = sentinel_buf[safe_len..].to_string();
-                        on_token(TokenEvent::ResponseToken(flushed));
-                    }
-                }
-                // else: keep buffering (potential partial sentinel match)
-            }
+            let piece = String::from_utf8_lossy(&bytes).to_string();
+            on_token(TokenEvent::Token(piece));
         }
 
         batch
@@ -283,16 +271,41 @@ where
     Ok(String::from_utf8_lossy(&output_bytes).trim().to_string())
 }
 
-/// Genera tokens de respuesta hasta EOG o límite de config.
-/// Obtiene el LlamaModel directamente del contexto (ctx.model()),
-/// así nunca necesita un &LlmModel extra.
-fn resolve_seed(inference_config: &InferenceConfig) -> u32 {
-    match inference_config.seed_option {
+// ── Trait to unify InferenceConfig and AnalysisConfig ────────
+
+pub trait HasSamplerParams {
+    fn top_k(&self) -> i32;
+    fn top_p(&self) -> f32;
+    fn temperature(&self) -> f32;
+    fn seed_option(&self) -> SeedOption;
+    fn seed_value(&self) -> u32;
+}
+
+impl HasSamplerParams for InferenceConfig {
+    fn top_k(&self) -> i32 { self.top_k }
+    fn top_p(&self) -> f32 { self.top_p }
+    fn temperature(&self) -> f32 { self.temperature }
+    fn seed_option(&self) -> SeedOption { self.seed_option.clone() }
+    fn seed_value(&self) -> u32 { self.seed_value }
+}
+
+impl HasSamplerParams for AnalysisConfig {
+    fn top_k(&self) -> i32 { self.top_k }
+    fn top_p(&self) -> f32 { self.top_p }
+    fn temperature(&self) -> f32 { self.temperature }
+    fn seed_option(&self) -> SeedOption { self.seed_option.clone() }
+    fn seed_value(&self) -> u32 { self.seed_value }
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+
+fn resolve_seed(seed_option: SeedOption, seed_value: u32) -> u32 {
+    match seed_option {
         SeedOption::Random => SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_nanos() as u32,
-        SeedOption::Fixed => inference_config.seed_value,
+        SeedOption::Fixed => seed_value,
     }
 }
 
@@ -303,5 +316,3 @@ fn bos_flag(state: &InferenceState) -> AddBos {
         AddBos::Never
     }
 }
-
-
