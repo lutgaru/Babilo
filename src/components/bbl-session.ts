@@ -43,6 +43,7 @@ export class BblSession extends withI18n(LitElement) {
   @state() nextStepHint: string | null = null;
   @state() messages: TranscriptMessage[] = [];
   @state() response = '';
+  private _pendingResponse = '';
 
   /** Controls the side-panel visibility; open by default */
   @state() transcriptOpen = true;
@@ -264,8 +265,10 @@ export class BblSession extends withI18n(LitElement) {
   // ── Stream events ──
   private handleStreamEvent(event: StreamEvent) {
     switch (event.type) {
-      case 'sentinel_reached':
-        this.aiState = 'speaking';
+      case 'response':
+        this.response = event.text;
+        this._pendingResponse = event.text;
+        console.log('Received response:', event.text);
         break;
 
       case 'analysis':
@@ -275,9 +278,11 @@ export class BblSession extends withI18n(LitElement) {
         this.nextStepHint = event.data.next_step_hint ?? null;
         this.messages = [...this.messages, {
           analysis: event.data,
+          response: this._pendingResponse,
           timestamp: Date.now(),
         }];
-        // AI state is now driven by backend via babilo://ai-state events
+        this._pendingResponse = '';
+        console.log('Received analysis:', event.data);
         break;
 
       case 'error':

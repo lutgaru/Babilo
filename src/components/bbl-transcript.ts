@@ -48,10 +48,10 @@ export class BblTranscript extends withI18n(LitElement) {
     }
   }
 
-  addMessage(analysis: BabiloAnalysis) {
+  addMessage(analysis: BabiloAnalysis, response: string = '') {
     const newMessages: TranscriptMessage[] = [
       ...this.messages,
-      { analysis, timestamp: Date.now() }
+      { analysis, response, timestamp: Date.now() }
     ];
     this.messages = newMessages.length > this.maxMessages
       ? newMessages.slice(-this.maxMessages)
@@ -209,12 +209,12 @@ export class BblTranscript extends withI18n(LitElement) {
               ` : ''}
 
               <!-- AI response -->
-              ${msg.analysis.response ? html`
+              ${msg.response ? html`
                 <div class="
                   mt-1 pt-2 border-t border-[var(--bbl-border)]
                   text-[14px] leading-relaxed text-[var(--bbl-text)]
                 ">
-                  ${msg.analysis.response}
+                  ${msg.response}
                 </div>
               ` : ''}
             </div>

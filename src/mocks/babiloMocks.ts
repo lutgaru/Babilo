@@ -62,7 +62,6 @@ export const mockSessionStart = (path: string): SessionInfo => {
 export const mockAnalysisExamples: BabiloAnalysis[] = [
     {
         transcription: "I wants to learning English for build a native application.",
-        response: "That is an awesome goal! Native applications are extremely fast. Just a quick note: we say 'I want to learn' instead of 'wants to learning'. What programming language are you planning to use?",
         corrections: [
             { original: "I wants", fixed: "I want", reason: "First person singular ('I') does not add an 's' to the verb in present tense." },
             { original: "to learning", fixed: "to learn", reason: "After 'want to', you must use the infinitive base form of the verb." },
@@ -73,7 +72,6 @@ export const mockAnalysisExamples: BabiloAnalysis[] = [
     },
     {
         transcription: "I am planning to use Rust because it have good performance.",
-        response: "Excellent choice! Rust offers incredible speed and safety. Watch out for the subject-verb agreement with 'it'. It takes 'has' instead of 'have'. Are you planning to build a desktop app or a CLI tool?",
         corrections: [
             { original: "it have", fixed: "it has", reason: "The pronoun 'it' is third person singular, so it requires the conjugated form 'has'." }
         ],
@@ -82,16 +80,20 @@ export const mockAnalysisExamples: BabiloAnalysis[] = [
     }
 ];
 
+export const mockResponseText = "That is an awesome goal! Native applications are extremely fast. Just a quick note: we say 'I want to learn' instead of 'wants to learning'. What programming language are you planning to use?";
+
 
 
 // 5. Message History (Transcripts)
 export const mockTranscriptHistory = (): TranscriptMessage[] => [
     {
         analysis: mockAnalysisExamples[0],
+        response: mockResponseText,
         timestamp: Date.now() - 60000
     },
     {
         analysis: mockAnalysisExamples[1],
+        response: mockResponseText,
         timestamp: Date.now() - 30000
     }
 ];
@@ -128,6 +130,15 @@ export const mockSettings: AppSettings = {
         seed_option: 'Random',
         seed_value: 7,
     },
+    analysis: {
+        context_size: 2000,
+        max_output_tokens: 512,
+        temperature: 0.3,
+        top_p: 0.8,
+        top_k: 10,
+        seed_option: 'Random',
+        seed_value: 7,
+    },
     tts: null,
     gui: {
         theme: 'light',
@@ -151,11 +162,12 @@ export const simulateRustStream = async (prompt: string): Promise<void> => {
     emitAiState('thinking');
     await delay(100);
 
-    emitAiState('speaking');
-    const sentinelEvent: StreamEvent = {
-        type: 'sentinel_reached'
+    const responseEvent: StreamEvent = {
+        type: 'response',
+        text: mockResponseText
     };
-    window.dispatchEvent(new CustomEvent('babilo://stream', { detail: { payload: sentinelEvent } }));
+    window.dispatchEvent(new CustomEvent('babilo://stream', { detail: { payload: responseEvent } }));
+    emitAiState('speaking');
 
     await delay(1000);
 

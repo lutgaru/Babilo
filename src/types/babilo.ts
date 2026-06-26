@@ -7,7 +7,6 @@ export interface Correction {
 
 export interface BabiloAnalysis {
   transcription: string;
-  response: string;
   corrections: Correction[];
   score: number;
   next_step_hint: string | null;
@@ -15,6 +14,7 @@ export interface BabiloAnalysis {
 
 export type TranscriptMessage = {
   analysis: BabiloAnalysis;
+  response: string;
   timestamp: number;
 };
 
@@ -47,18 +47,17 @@ export type ModeFileInfo = {
 };
 
 export type BabiloEvent =
-  | { type: 'sentinel_reached' }
+  | { type: 'response'; text: string }
   | { type: 'analysis'; data: BabiloAnalysis }
   | { type: 'error'; message: string }
 
-export type AudioDevice = { name: string; id?: string }; // Adjust based on your actual backend response
+export type AudioDevice = { name: string; id?: string };
 
 export type AIState = 'idle' | 'listening' | 'thinking' | 'processing' | 'speaking';
 export type Message = { role: 'user' | 'ai'; content: string; timestamp?: number };
 
-// ── Stream Event Type (adjust to match your backend) ──
 export type StreamEvent =
-  | { type: 'sentinel_reached' }
+  | { type: 'response'; text: string }
   | {
     type: 'analysis';
     data: BabiloAnalysis;
@@ -99,6 +98,16 @@ export interface InferenceSettings {
   seed_value: number;
 }
 
+export interface AnalysisSettings {
+  context_size: number;
+  max_output_tokens: number;
+  temperature: number;
+  top_p: number;
+  top_k: number;
+  seed_option: SeedOption;
+  seed_value: number;
+}
+
 export interface AeSettings {
   sample_rate: number;
   base_chunk_size: number;
@@ -123,6 +132,7 @@ export interface AppSettings {
   audio: AudioSettings;
   llm: LlmSettings;
   inference: InferenceSettings;
+  analysis: AnalysisSettings;
   tts: TtsSettings | null;
   gui: GuiSettings;
 }
