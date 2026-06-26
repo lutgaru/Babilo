@@ -67,7 +67,7 @@ pub async fn start_session(
     if let Some(prompt) = turn_prompt {
         let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
         manager.set_ai_state(AiState::Thinking, Some(&app));
-        manager.run_turn_streaming(None, prompt, app);
+        manager.run_turn_streaming(None, prompt, String::new(), app);
     }
 
     Ok(session_info)
@@ -155,13 +155,13 @@ pub async fn stop_and_process_streaming(
     };
 
     // ── Phase 2: delegate to SessionManager ─────────────────────
-    // Arc cloned before any await — State<'_> free
+    let user_input = prompt.clone();
     let manager_arc = Arc::clone(&state.session_manager);
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
         let fullprompt = manager.get_turn_prompt(&prompt, true).unwrap_or_default();
         manager.set_ai_state(AiState::Thinking, Some(&app));
-        manager.run_turn_streaming(Some(resampled), fullprompt, app);
+        manager.run_turn_streaming(Some(resampled), fullprompt, user_input, app);
     }
 
     Ok(())
@@ -173,13 +173,13 @@ pub async fn process_text_streaming(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    // Arc cloned before any await — State<'_> free
+    let user_input = prompt.clone();
     let manager_arc = Arc::clone(&state.session_manager);
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
         let fullprompt = manager.get_turn_prompt(&prompt, false).unwrap_or_default();
         manager.set_ai_state(AiState::Thinking, Some(&app));
-        manager.run_turn_streaming(None, fullprompt, app);
+        manager.run_turn_streaming(None, fullprompt, user_input, app);
     }
 
     Ok(())

@@ -23,7 +23,10 @@ use crate::{
     errors::{AppResult, SessionError},
     llama::InferenceEngine,
     modes::{load_mode, ModeConfig},
-    schemas::{master_system_instruction, AiState, BabiloAnalysis, BabiloEvent, TokenEvent},
+    schemas::{
+        analysis_system_instruction, conversation_system_instruction, AiState, BabiloAnalysis,
+        BabiloEvent, TokenEvent,
+    },
     tts::TtsEngine,
 };
 
@@ -52,7 +55,6 @@ pub struct SessionInfo {
     pub mode_id: String,
     pub mode_name: String,
     pub caps: SessionCaps,
-    /// First LLM line when llm_initiates=true; None if user speaks first.
     pub opening_line: Option<String>,
 }
 
@@ -103,17 +105,11 @@ pub struct Session {
 }
 
 // ─── SessionManager ──────────────────────────────────────────
-//
-// Owns the engine Arcs so commands never need to touch them directly.
-// This is the key change: LLM and TTS live here, not loose in AppState.
 
 pub struct SessionManager {
     active_session: Option<Session>,
-    // Engines are kept as Arc so spawn_blocking can clone them cheaply
-    // without holding a borrow on SessionManager itself.
     pub llm_engine: Arc<Mutex<Option<InferenceEngine>>>,
     pub tts_engine: Arc<Mutex<Option<TtsEngine>>>,
-    /// Source of truth for the AI state across the entire app.
     ai_state: Arc<Mutex<AiState>>,
 }
 
@@ -132,8 +128,6 @@ impl SessionManager {
         *self.tts_engine.lock().unwrap() = tts;
     }
 
-    /// Update the AI state and emit a Tauri event so the frontend stays in sync.
-    /// Pass `None` for `app` when no event emission is needed.
     pub fn set_ai_state(&self, state: AiState, app: Option<&tauri::AppHandle>) {
         *self.ai_state.lock().unwrap() = state;
         if let Some(app) = app {
@@ -141,12 +135,10 @@ impl SessionManager {
         }
     }
 
-    /// Read the current AI state without emitting an event.
     pub fn get_ai_state(&self) -> AiState {
         *self.ai_state.lock().unwrap()
     }
 
-    /// Clone the inner Arc so spawned threads can track state on their own.
     pub fn ai_state_arc(&self) -> Arc<Mutex<AiState>> {
         Arc::clone(&self.ai_state)
     }
@@ -158,7 +150,6 @@ impl SessionManager {
             return Err(SessionError::AlreadyActive.into());
         }
 
-        // Reset LLM context for a clean slate
         {
             let mut llm = self
                 .llm_engine
@@ -267,25 +258,26 @@ impl SessionManager {
         ))
     }
 
-    // ── Inference (owns the engines, no State<'_> needed) ────
+    // ── Two-phase inference ──────────────────────────────────
     //
-    // Call this from commands after releasing any lock on SessionManager.
-    // Pattern:
-    //   1. Lock SessionManager → get turn_prompt → drop lock
-    //   2. Clone Arc<Mutex<SessionManager>> and call run_turn_streaming
+    // Phase 1 — Response:   uses main context (200k), generates conversational reply
+    // Phase 2 — Analysis:   uses analysis context (2k, reset each turn), generates JSON
+    //
+    // Call from commands:
+    //   1. Lock SessionManager → get_turn_prompt → drop lock
+    //   2. Clone Arc and call run_turn_streaming
 
     pub fn run_turn_streaming(
         &self,
         audio_raw: Option<Vec<f32>>,
         prompt: String,
+        user_input: String,
         app: tauri::AppHandle,
     ) {
         let llm_engine = Arc::clone(&self.llm_engine);
         let tts_engine = Arc::clone(&self.tts_engine);
         let ai_state = Arc::clone(&self.ai_state);
 
-        // Clone app handle so the state-change closure can own it independently
-        // from the `emit` closure used inside spawn_blocking.
         let app_for_state = app.clone();
         let ai_state_changed = move |state: AiState| {
             *ai_state.lock().unwrap() = state;
@@ -312,93 +304,102 @@ impl SessionManager {
                 }
             });
 
-            // Stores the deferred result so we can join TTS before emitting
-            let mut deferred_analysis: Option<Result<BabiloAnalysis, String>> = None;
-            let mut has_errored = false;
-
             let mut llm_lock = llm_engine.lock().unwrap();
-            match llm_lock.as_mut() {
+            let model = match llm_lock.as_mut() {
                 None => {
                     emit(BabiloEvent::Error {
                         message: "LLM not initialized".into(),
                     });
-                    has_errored = true;
+                    return;
                 }
-                Some(model) => {
-                    if model.model().context_is_full(model.state().n_past, 256) {
-                        let _ = model.reset();
-                    }
+                Some(m) => m,
+            };
 
-                    let mut analysis_buf = String::new();
-                    let mut response_buf = String::new();
-                    let mut tts_tx_opt = Some(tts_tx);
+            // ── Phase 1: Generate response ──────────────────────────
+            let response_text = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+            let tts_tx_opt = std::sync::Arc::new(std::sync::Mutex::new(Some(tts_tx)));
 
-                    let on_token = |event| match event {
-                        TokenEvent::ResponseToken(text) => {
-                            response_buf.push_str(&text);
-                        }
-                        TokenEvent::SentinelReached => {
-                            let partial = response_buf.trim().to_string();
-                            if !partial.is_empty() {
-                                if let Some(tx) = &tts_tx_opt {
-                                    let _ = tx.send(partial);
-                                }
-                            }
-                            ai_state_changed(AiState::Speaking);
-                            emit(BabiloEvent::SentinelReached);
-                        }
-                        TokenEvent::AnalysisToken(text) => {
-                            analysis_buf.push_str(&text);
-                        }
-                        TokenEvent::Done => {
-                            drop(tts_tx_opt.take());
-                            let final_response = response_buf.trim().to_string();
-                            if final_response.is_empty() {
-                                deferred_analysis = Some(Err("Empty response from model".into()));
-                                return;
-                            }
-                            let result = BabiloAnalysis::builder()
-                                .with_response(final_response)
-                                .with_json_payload(&analysis_buf)
-                                .and_then(|b| b.build())
-                                .map_err(|e| e.to_string());
-                            deferred_analysis = Some(result);
-                        }
-                    };
+            let cb_response_text = response_text.clone();
+            let cb_tts_tx = tts_tx_opt.clone();
 
-                    let result = match audio_raw {
-                        Some(ref pcm) => model.infer_audio_streaming(pcm, &prompt, on_token),
-                        None => model.infer_text_streaming(&prompt, on_token),
-                    };
-
-                    if let Err(e) = result {
-                        deferred_analysis = Some(Err(e.to_string()));
+            let response_callback = move |event: TokenEvent| match event {
+                TokenEvent::Token(text) => {
+                    cb_response_text.lock().unwrap().push_str(&text);
+                }
+                TokenEvent::Done => {
+                    let text = cb_response_text.lock().unwrap().trim().to_string();
+                    if !text.is_empty() {
+                        if let Some(tx) = &*cb_tts_tx.lock().unwrap() {
+                            let _ = tx.send(text);
+                        }
                     }
                 }
-            }
+            };
 
-            // ── KEY FIX: Wait for TTS to finish before emitting analysis ──
-            let _ = tts_handle.join();
+            let phase1_result = match audio_raw {
+                Some(ref pcm) => model.infer_audio_streaming(pcm, &prompt, response_callback),
+                None => model.infer_text_streaming(&prompt, response_callback),
+            };
 
-            if has_errored {
+            if let Err(e) = phase1_result {
+                emit(BabiloEvent::Error {
+                    message: format!("Response generation failed: {}", e),
+                });
                 ai_state_changed(AiState::Idle);
                 return;
             }
 
-            match deferred_analysis {
-                Some(Ok(data)) => {
-                    emit(BabiloEvent::Analysis { data });
-                    ai_state_changed(AiState::Idle);
+            // Emit response to frontend (TTS is already playing in background)
+            let final_response = response_text.lock().unwrap().trim().to_string();
+            emit(BabiloEvent::Response {
+                text: final_response.clone(),
+            });
+            ai_state_changed(AiState::Speaking);
+
+            // ── Phase 2: Generate analysis (while TTS plays) ──────────
+            let analysis_prompt = build_analysis_prompt(&user_input, &final_response);
+            let mut analysis_buf = String::new();
+
+            let analysis_callback = |event: TokenEvent| match event {
+                TokenEvent::Token(text) => {
+                    analysis_buf.push_str(&text);
                 }
-                Some(Err(msg)) => {
-                    emit(BabiloEvent::Error { message: msg });
-                    ai_state_changed(AiState::Idle);
+                TokenEvent::Done => {}
+            };
+
+            let phase2_result =
+                model.infer_analysis_streaming(&analysis_prompt, analysis_callback);
+
+            // Close TTS channel and wait for playback to finish
+            drop(tts_tx_opt.lock().unwrap().take());
+            let _ = tts_handle.join();
+
+            match phase2_result {
+                Ok(()) => {
+                    let result = BabiloAnalysis::builder()
+                        .with_json_payload(&analysis_buf)
+                        .and_then(|b| b.build())
+                        .map_err(|e| e.to_string());
+
+                    match result {
+                        Ok(data) => {
+                            emit(BabiloEvent::Analysis { data });
+                        }
+                        Err(msg) => {
+                            emit(BabiloEvent::Error {
+                                message: format!("Analysis parse failed: {}", msg),
+                            });
+                        }
+                    }
                 }
-                None => {
-                    // Inference didn't produce any terminal event — shouldn't happen
-                    ai_state_changed(AiState::Idle);
+                Err(e) => {
+                    emit(BabiloEvent::Error {
+                        message: format!("Analysis generation failed: {}", e),
+                    });
                 }
             }
+
+            ai_state_changed(AiState::Idle);
         });
     }
 
@@ -428,10 +429,36 @@ impl SessionManager {
 
 pub fn get_prompt_hierarchy(mode: &dyn ModeConfig) -> Result<PromptHierarchy, String> {
     Ok(PromptHierarchy {
-        system_format: master_system_instruction(),
+        system_format: conversation_system_instruction(),
         mode_prompt: mode.mode_prompt().to_string(),
         role_prompt: mode.role_prompt().unwrap_or("").to_string(),
     })
+}
+
+/// Build a concise analysis prompt from the current turn data.
+/// This prompt is fed to the small analysis context (reset each turn).
+pub fn build_analysis_prompt(user_input: &str, model_response: &str) -> String {
+    let input = if user_input.trim().is_empty() {
+        "[audio input]"
+    } else {
+        user_input.trim()
+    };
+
+    format!(
+        r#"{}.
+
+User input:
+{}
+
+AI response:
+{}
+
+Analysis:
+"#,
+        analysis_system_instruction().trim(),
+        input,
+        model_response.trim(),
+    )
 }
 
 pub fn build_session_info(
@@ -481,12 +508,10 @@ pub fn build_turn_prompt(
     let marker = llama_cpp_2::mtmd::mtmd_default_marker().to_string();
     let mut prompt = String::new();
 
-    // BOS solo en el primer turno
     if injection.turns_processed == 0 {
         prompt.push_str("<bos>");
     }
 
-    // System: solo en el primer turno o cada N intervalos
     if injection.turns_processed == 0 || injection.should_remind_system(SYSTEM_REMINDER_INTERVAL) {
         let system = format!(
             "{}.{}.\n{}",
@@ -497,12 +522,10 @@ pub fn build_turn_prompt(
         prompt.push_str(&format!("<|turn>system\n{system}\n<turn|>\n"));
     }
 
-    // Turno user
     if !user_input.trim().is_empty() || is_audio {
         prompt.push_str(&format!("<|turn>user\n{user_input}\n{marker}\n<turn|>\n"));
     }
 
-    // Prefijo de generación del modelo
     prompt.push_str("<|turn>model\n");
 
     injection.increment();

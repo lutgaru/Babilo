@@ -20,8 +20,7 @@ pub struct Correction {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BabiloAnalysis {
     pub transcription: String,
-    pub response: String,             // ← From spoken stream
-    pub corrections: Vec<Correction>, // ← From JSON stream
+    pub corrections: Vec<Correction>,
     pub score: u8,
     pub next_step_hint: Option<String>,
 }
@@ -29,14 +28,10 @@ pub struct BabiloAnalysis {
 use crate::errors::{AppError, LlmError};
 
 pub struct BabiloAnalysisBuilder {
-    // Fields from JSON inference
     transcription: Option<String>,
     corrections: Option<Vec<Correction>>,
     score: Option<u8>,
     next_step_hint: Option<String>,
-
-    // Field from spoken response stream (independent)
-    response: Option<String>,
 }
 
 impl Default for BabiloAnalysisBuilder {
@@ -46,7 +41,6 @@ impl Default for BabiloAnalysisBuilder {
             corrections: None,
             score: None,
             next_step_hint: None,
-            response: None,
         }
     }
 }
@@ -56,17 +50,6 @@ impl BabiloAnalysisBuilder {
         Self::default()
     }
 
-    // ─── Fluent setters for spoken response (independent stream) ───
-    pub fn with_response(mut self, response: String) -> Self {
-        self.response = Some(response);
-        self
-    }
-
-    pub fn response(&self) -> Option<&str> {
-        self.response.as_deref()
-    }
-
-    // ─── Fluent setters for JSON fields (optional, for manual override) ───
     pub fn with_transcription(mut self, transcription: String) -> Self {
         self.transcription = Some(transcription);
         self
@@ -87,7 +70,6 @@ impl BabiloAnalysisBuilder {
         self
     }
 
-    // ─── Parse JSON payload into builder (merges with existing fields) ───
     pub fn with_json_payload(mut self, raw: &str) -> Result<Self, AppError> {
         #[derive(Deserialize)]
         struct PartialAnalysis {
@@ -110,7 +92,6 @@ impl BabiloAnalysisBuilder {
             )))
         })?;
 
-        // Merge partial into builder (builder values take precedence if already set)
         if self.transcription.is_none() {
             self.transcription = partial.transcription;
         }
@@ -127,27 +108,22 @@ impl BabiloAnalysisBuilder {
         Ok(self)
     }
 
-    // ─── Final validation and construction ───
     pub fn build(self) -> Result<BabiloAnalysis, AppError> {
         Ok(BabiloAnalysis {
             transcription: self
                 .transcription
                 .ok_or_else(|| AppError::from(LlmError::MissingField("transcription".into())))?,
-            response: self
-                .response
-                .ok_or_else(|| AppError::from(LlmError::MissingField("response".into())))?,
             corrections: self
                 .corrections
                 .ok_or_else(|| AppError::from(LlmError::MissingField("corrections".into())))?,
             score: self
                 .score
                 .ok_or_else(|| AppError::from(LlmError::MissingField("score".into())))?,
-            next_step_hint: self.next_step_hint, // Optional, no error if missing
+            next_step_hint: self.next_step_hint,
         })
     }
 }
 
-// Convenience: Add builder() to BabiloAnalysis
 impl BabiloAnalysis {
     pub fn builder() -> BabiloAnalysisBuilder {
         BabiloAnalysisBuilder::new()

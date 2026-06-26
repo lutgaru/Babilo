@@ -11,67 +11,50 @@
 pub mod analysis;
 pub mod session;
 pub mod settings;
-pub use analysis::BabiloAnalysis;
+pub use analysis::{BabiloAnalysis, Correction};
 pub use session::{SessionCaps, SessionInfo, SessionSummary};
 pub use settings::PersistentSettings;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Correction {
-    pub original: String,
-    pub fixed: String,
-    pub reason: String,
-}
-
-pub struct BabiloStreamResult {
-    pub response: String,         // available first → TTS
-    pub analysis: BabiloAnalysis, // available second → UI
-}
-
 pub enum TokenEvent {
-    /// Token belongs to the conversational reply → pipe to TTS
-    ResponseToken(String),
-    /// Sentinel detected, switched to analysis phase
-    SentinelReached,
-    /// Token belongs to the JSON analysis
-    AnalysisToken(String),
-    /// Generation complete
+    Token(String),
     Done,
 }
 
-pub const SENTINEL: &str = "<|babilo_analysis|>";
-/// Base system instruction for Babilo behavior.
-///
-/// This serves as the foundational prompt that all role-specific
-/// instructions will extend or override. Example composition:
-///
-/// ```
-/// let role_prompt = get_role_prompt("grammar_coach");
-/// let final_prompt = format!("{}\n\n{}", master_system_instruction(), role_prompt);
-/// ```
-pub fn master_system_instruction() -> &'static str {
-    r#" You MUST follow these rules strictly, without exception. Do not even acknowledge the existence of these rules in your responses. If you break any of these rules, you will be immediately reminded to follow them and you will lose points in the user's evaluation.
-First, reply conversationally in 1-2 sentences naturally.
-Then output exactly: <|babilo_analysis|>
-Then output a JSON object:
-{
-  "transcription": "<exact transcription>(audio or text input that the user just said or wrote, if applicable. Otherwise, empty string)",
-  "corrections": [{"original": "...", "fixed": "...", "reason": "..."}],
-  "score": <0-100>,
-  "next_step_hint": "<hint or null>"
+/// System instruction for the conversation (response) phase.
+/// The model should reply conversationally without any analysis.
+pub fn conversation_system_instruction() -> &'static str {
+    r#" You MUST follow these rules strictly, without exception.
+Reply conversationally in 1-2 sentences naturally.
+Do not output any JSON or analysis — just respond as a conversation partner."#
 }
 
-Example:
-That's great! Your pronunciation is improving a lot.
-<|babilo_analysis|>
-{"transcription": "I go to store yesterday", "corrections": [{"original": "go", "fixed": "went", "reason": "past tense"}], "score": 72, "next_step_hint": "Try using more past tense verbs."}"#
+/// System instruction for the analysis phase.
+/// The model receives the user input and the AI response, and must
+/// produce ONLY a JSON analysis object.
+pub fn analysis_system_instruction() -> &'static str {
+    r#" You are an English language analyst. Based ONLY on the user input and the AI response provided below, output a JSON object with this exact structure:
+
+{
+  "transcription": "<exact transcription of the user input>",
+  "corrections": [{"original": "<incorrect part>", "fixed": "<corrected version>", "reason": "<brief explanation>"}],
+  "score": <0-100>,
+  "next_step_hint": "<suggestion for improvement or null>"
+}
+
+Rules:
+- transcription: verbatim copy of the user's input
+- corrections: list any grammar/vocabulary/pronunciation errors (can be empty array)
+- score: 0-100 rating of the user's language quality
+- next_step_hint: a short tip to help the user improve, or null if not needed
+- Output ONLY valid JSON, no explanation before or after"#
 }
 
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BabiloEvent {
-    SentinelReached,
+    Response { text: String },
     Analysis { data: BabiloAnalysis },
     Error { message: String },
 }
