@@ -127,6 +127,65 @@ impl InferenceEngine {
 
     // ── Analysis inference (uses small 2k context, reset each turn) ──
 
+    pub fn infer_audio_analysis_streaming(
+        &mut self,
+        audio_pcm: &[f32],
+        analysis_prompt: &str,
+        on_token: impl FnMut(TokenEvent),
+    ) -> Result<(), AppError> {
+        self.model.reset_analysis_context()?;
+
+        let analysis_config = self.model.analysis_config().clone();
+        let config = self.model.config().clone();
+        let n_ctx = self.model.analysis_n_ctx();
+        let n_ubatch = self.model.analysis_n_ubatch();
+
+        let audio_bitmap = MtmdBitmap::from_audio_data(audio_pcm)
+            .map_err(|e| LlmError::ModelLoad(e.to_string()))?;
+
+        let chunks = {
+            let mtmd = self
+                .model
+                .mtmd_context()
+                .ok_or(LlmError::MtmdInit("No mmproj loaded".into()))?;
+
+            mtmd.tokenize(
+                MtmdInputText {
+                    text: analysis_prompt.to_string(),
+                    add_special: true,
+                    parse_special: true,
+                },
+                &[&audio_bitmap],
+            )
+            .map_err(|e| LlmError::Tokenization(e.to_string()))?
+        };
+
+        let total_tokens = chunks.total_tokens();
+
+        if total_tokens > n_ctx as usize {
+            return Err(LlmError::ContextFull.into());
+        }
+
+        let (ctx, mtmd) = self.model.split_analysis_ctx_mtmd()?;
+        let mut analysis_state = InferenceState::default();
+
+        let new_n_past = chunks
+            .eval_chunks(mtmd, ctx, analysis_state.n_past, 0, n_ubatch as i32, true)
+            .map_err(|e| LlmError::Decode(e.to_string()))?;
+
+        analysis_state.n_past = new_n_past;
+
+        generate_streaming(
+            ctx,
+            &mut analysis_state,
+            &config,
+            &analysis_config,
+            on_token,
+        )?;
+
+        Ok(())
+    }
+
     pub fn infer_analysis_streaming(
         &mut self,
         analysis_prompt: &str,
@@ -152,7 +211,13 @@ impl InferenceEngine {
         let mut analysis_state = InferenceState::default();
         decode_tokens(ctx, &mut analysis_state, &tokens)?;
 
-        generate_streaming(ctx, &mut analysis_state, &config, &analysis_config, on_token)?;
+        generate_streaming(
+            ctx,
+            &mut analysis_state,
+            &config,
+            &analysis_config,
+            on_token,
+        )?;
 
         Ok(())
     }
@@ -231,7 +296,10 @@ where
 {
     let model = ctx.model;
 
-    let seed = resolve_seed(inference_config.seed_option(), inference_config.seed_value());
+    let seed = resolve_seed(
+        inference_config.seed_option(),
+        inference_config.seed_value(),
+    );
 
     let mut sampler = LlamaSampler::chain_simple([
         LlamaSampler::top_k(inference_config.top_k()),
@@ -282,19 +350,39 @@ pub trait HasSamplerParams {
 }
 
 impl HasSamplerParams for InferenceConfig {
-    fn top_k(&self) -> i32 { self.top_k }
-    fn top_p(&self) -> f32 { self.top_p }
-    fn temperature(&self) -> f32 { self.temperature }
-    fn seed_option(&self) -> SeedOption { self.seed_option.clone() }
-    fn seed_value(&self) -> u32 { self.seed_value }
+    fn top_k(&self) -> i32 {
+        self.top_k
+    }
+    fn top_p(&self) -> f32 {
+        self.top_p
+    }
+    fn temperature(&self) -> f32 {
+        self.temperature
+    }
+    fn seed_option(&self) -> SeedOption {
+        self.seed_option.clone()
+    }
+    fn seed_value(&self) -> u32 {
+        self.seed_value
+    }
 }
 
 impl HasSamplerParams for AnalysisConfig {
-    fn top_k(&self) -> i32 { self.top_k }
-    fn top_p(&self) -> f32 { self.top_p }
-    fn temperature(&self) -> f32 { self.temperature }
-    fn seed_option(&self) -> SeedOption { self.seed_option.clone() }
-    fn seed_value(&self) -> u32 { self.seed_value }
+    fn top_k(&self) -> i32 {
+        self.top_k
+    }
+    fn top_p(&self) -> f32 {
+        self.top_p
+    }
+    fn temperature(&self) -> f32 {
+        self.temperature
+    }
+    fn seed_option(&self) -> SeedOption {
+        self.seed_option.clone()
+    }
+    fn seed_value(&self) -> u32 {
+        self.seed_value
+    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────

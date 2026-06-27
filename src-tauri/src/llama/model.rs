@@ -222,6 +222,30 @@ impl LlmModel {
         Ok((ctx_ref, mtmd))
     }
 
+    /// Retorna (&mut analysis_ctx, &mtmd) simultáneamente via borrow split explícito.
+    pub fn split_analysis_ctx_mtmd(
+        &mut self,
+    ) -> Result<(&mut LlamaContext<'_>, &MtmdContext), AppError> {
+        // SAFETY: no movemos Inner.
+        let inner = unsafe { self.inner.as_mut().get_unchecked_mut() };
+
+        let ctx = inner
+            .analysis_ctx
+            .as_mut()
+            .ok_or(LlmError::NotInitialized)?;
+
+        let mtmd = inner
+            .mtmd_context
+            .as_ref()
+            .ok_or(LlmError::MtmdInit("No mmproj loaded".into()))?;
+
+        // SAFETY: analysis_ctx y mtmd_context son campos distintos de Inner → no se solapan.
+        let ctx_ptr: *mut LlamaContext<'static> = ctx as *mut _;
+        let ctx_ref: &mut LlamaContext<'_> = unsafe { std::mem::transmute(&mut *ctx_ptr) };
+
+        Ok((ctx_ref, mtmd))
+    }
+
     /// Tamaño del contexto principal en tokens.
     pub fn n_ctx(&self) -> u32 {
         self.ctx_params.n_ctx().map(|n| n.get()).unwrap_or(4096)
@@ -233,6 +257,10 @@ impl LlmModel {
             .n_ctx()
             .map(|n| n.get())
             .unwrap_or(2000)
+    }
+
+    pub fn analysis_n_ubatch(&self) -> u32 {
+        self.analysis_ctx_params.n_ubatch()
     }
 
     /// Verifica si agregar `needed` tokens llenaría el contexto.

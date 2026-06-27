@@ -357,7 +357,9 @@ impl SessionManager {
             ai_state_changed(AiState::Speaking);
 
             // ── Phase 2: Generate analysis (while TTS plays) ──────────
-            let analysis_prompt = build_analysis_prompt(&user_input, &final_response);
+            let is_audio = audio_raw.is_some();
+            let analysis_prompt =
+                build_analysis_prompt(&user_input, &final_response, is_audio);
             let mut analysis_buf = String::new();
 
             let analysis_callback = |event: TokenEvent| match event {
@@ -367,8 +369,12 @@ impl SessionManager {
                 TokenEvent::Done => {}
             };
 
-            let phase2_result =
-                model.infer_analysis_streaming(&analysis_prompt, analysis_callback);
+            let phase2_result = match audio_raw {
+                Some(ref pcm) => {
+                    model.infer_audio_analysis_streaming(pcm, &analysis_prompt, analysis_callback)
+                }
+                None => model.infer_analysis_streaming(&analysis_prompt, analysis_callback),
+            };
 
             // Close TTS channel and wait for playback to finish
             drop(tts_tx_opt.lock().unwrap().take());
@@ -437,11 +443,18 @@ pub fn get_prompt_hierarchy(mode: &dyn ModeConfig) -> Result<PromptHierarchy, St
 
 /// Build a concise analysis prompt from the current turn data.
 /// This prompt is fed to the small analysis context (reset each turn).
-pub fn build_analysis_prompt(user_input: &str, model_response: &str) -> String {
-    let input = if user_input.trim().is_empty() {
-        "[audio input]"
+/// When `is_audio` is true, the MTMD marker is appended so the model
+/// receives audio embeddings during analysis.
+pub fn build_analysis_prompt(
+    user_input: &str,
+    model_response: &str,
+    is_audio: bool,
+) -> String {
+    let input = if is_audio {
+        let marker = llama_cpp_2::mtmd::mtmd_default_marker();
+        format!("{}\n{}", user_input.trim(), marker)
     } else {
-        user_input.trim()
+        user_input.trim().to_string()
     };
 
     format!(
