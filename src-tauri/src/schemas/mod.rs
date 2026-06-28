@@ -33,7 +33,7 @@ Do not output any JSON or analysis — just respond as a conversation partner."#
 /// The model receives the user input and the AI response, and must
 /// produce ONLY a JSON analysis object.
 pub fn analysis_system_instruction() -> &'static str {
-    r#" You are an English language analyst. Based ONLY on the user input and the AI response provided below, output a JSON object with this exact structure:
+    r#" You are an English language analyst. Based ONLY on the user input and, output a JSON object with this exact structure:
 
 {
   "transcription": "<exact transcription of the user input>",
@@ -47,7 +47,7 @@ Rules:
 - corrections: list any grammar/vocabulary/pronunciation errors (can be empty array)
 - score: 0-100 rating of the user's language quality
 - next_step_hint: a short tip to help the user improve, or null if not needed
-- Output ONLY valid JSON, no explanation before or after"#
+- You must ONLY output valid JSON, no explanation before or after"#
 }
 
 

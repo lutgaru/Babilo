@@ -358,8 +358,7 @@ impl SessionManager {
 
             // ── Phase 2: Generate analysis (while TTS plays) ──────────
             let is_audio = audio_raw.is_some();
-            let analysis_prompt =
-                build_analysis_prompt(&user_input, &final_response, is_audio);
+            let analysis_prompt = build_analysis_prompt(&user_input, is_audio);
             let mut analysis_buf = String::new();
 
             let analysis_callback = |event: TokenEvent| match event {
@@ -445,32 +444,29 @@ pub fn get_prompt_hierarchy(mode: &dyn ModeConfig) -> Result<PromptHierarchy, St
 /// This prompt is fed to the small analysis context (reset each turn).
 /// When `is_audio` is true, the MTMD marker is appended so the model
 /// receives audio embeddings during analysis.
-pub fn build_analysis_prompt(
-    user_input: &str,
-    model_response: &str,
-    is_audio: bool,
-) -> String {
+pub fn build_analysis_prompt(user_input: &str, is_audio: bool) -> String {
     let input = if is_audio {
-        let marker = llama_cpp_2::mtmd::mtmd_default_marker();
-        format!("{}\n{}", user_input.trim(), marker)
+        format!(
+            "{}\n{}",
+            user_input,
+            llama_cpp_2::mtmd::mtmd_default_marker()
+        )
     } else {
-        user_input.trim().to_string()
+        user_input.to_string()
     };
 
     format!(
-        r#"{}.
-
-User input:
+        r#"
+<|turn>system\n
 {}
-
-AI response:
+\n<turn|>
+<|turn>user\n
 {}
-
-Analysis:
+\n<turn|>
+<|turn>model\n
 "#,
         analysis_system_instruction().trim(),
         input,
-        model_response.trim(),
     )
 }
 
