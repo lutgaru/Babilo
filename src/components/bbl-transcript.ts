@@ -14,6 +14,9 @@ export class BblTranscript extends withI18n(LitElement) {
   @property({ type: Array })
   messages: TranscriptMessage[] = [];
 
+  @property({ type: String })
+  pendingResponse = '';
+
   @property({ type: Number })
   maxMessages = 50;
 
@@ -120,7 +123,7 @@ export class BblTranscript extends withI18n(LitElement) {
   firstUpdated() { this._scrollToBottom(); }
 
   updated(changedProps: Map<string, unknown>) {
-    if (changedProps.has('messages')) {
+    if (changedProps.has('messages') || changedProps.has('pendingResponse')) {
       this._scrollToBottom();
     }
   }
@@ -146,7 +149,7 @@ export class BblTranscript extends withI18n(LitElement) {
         ${this.messages.map((msg) => html`
           <div class="message flex flex-col gap-2">
             
-            <!-- 🗣️ User transcription (right) -->
+            <!-- User transcription (right) -->
             <div class="flex flex-col items-end">
               <div class="
                 bg-[var(--bbl-btn-bg)] border-[0.5px] border-[var(--bbl-border)]
@@ -204,7 +207,7 @@ export class BblTranscript extends withI18n(LitElement) {
                   rounded-r-[var(--bbl-radius-sm)]
                   text-[13px] text-[var(--bbl-text-muted)]
                 ">
-                  💡 ${msg.analysis.next_step_hint}
+                  ${msg.analysis.next_step_hint}
                 </div>
               ` : ''}
 
@@ -221,6 +224,23 @@ export class BblTranscript extends withI18n(LitElement) {
 
           </div>
         `)}
+
+        ${this.pendingResponse ? html`
+          <div class="message flex flex-col gap-2">
+            <div class="
+              flex flex-col gap-2 self-start max-w-[90%]
+              bg-[var(--bbl-surface-alt)] border-[0.5px] border-[var(--bbl-border)]
+              rounded-[var(--bbl-radius-md)] rounded-bl-[4px]
+              p-3
+            ">
+              <div class="
+                text-[14px] leading-relaxed text-[var(--bbl-text)]
+              ">
+                ${this.pendingResponse}
+              </div>
+            </div>
+          </div>
+        ` : ''}
       </div>
     `;
   }

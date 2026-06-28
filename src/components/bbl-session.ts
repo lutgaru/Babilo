@@ -43,7 +43,7 @@ export class BblSession extends withI18n(LitElement) {
   @state() nextStepHint: string | null = null;
   @state() messages: TranscriptMessage[] = [];
   @state() response = '';
-  private _pendingResponse = '';
+  @state() pendingResponse = '';
 
   /** Controls the side-panel visibility; open by default */
   @state() transcriptOpen = true;
@@ -199,6 +199,7 @@ export class BblSession extends withI18n(LitElement) {
       await startSession(this.modePath);
       this.messages = [];
       this.response = '';
+      this.pendingResponse = '';
       this.score = null;
       this.corrections = [];
       this.nextStepHint = null;
@@ -267,7 +268,7 @@ export class BblSession extends withI18n(LitElement) {
     switch (event.type) {
       case 'response':
         this.response = event.text;
-        this._pendingResponse = event.text;
+        this.pendingResponse = event.text;
         console.log('Received response:', event.text);
         break;
 
@@ -278,10 +279,10 @@ export class BblSession extends withI18n(LitElement) {
         this.nextStepHint = event.data.next_step_hint ?? null;
         this.messages = [...this.messages, {
           analysis: event.data,
-          response: this._pendingResponse,
+          response: this.pendingResponse,
           timestamp: Date.now(),
         }];
-        this._pendingResponse = '';
+        this.pendingResponse = '';
         console.log('Received analysis:', event.data);
         break;
 
@@ -341,6 +342,7 @@ export class BblSession extends withI18n(LitElement) {
         <div class="flex-1 min-h-0 overflow-hidden flex flex-col">
           <bbl-transcript
             .messages=${this.messages}
+            .pendingResponse=${this.pendingResponse}
             class="w-full h-full">
           </bbl-transcript>
         </div>
