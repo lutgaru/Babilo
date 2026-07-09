@@ -1,0 +1,41 @@
+import { LitElement, html } from 'lit';
+import { property, customElement } from 'lit/decorators.js';
+import { withI18n, setLocale } from '../../i18n';
+import { applyTailwindToShadowRoot } from '../../lib/tailwind-styles';
+import { row, sectionHeader, select } from './settings-truncate';
+import type { GuiSettings } from '../../types/babilo';
+
+@customElement('bbl-settings-language')
+export class BblSettingsLanguage extends withI18n(LitElement) {
+    @property({ type: Object }) data: GuiSettings | null = null;
+    @property({ type: Function }) onChange: (partial: Partial<GuiSettings>) => void = () => {};
+
+    connectedCallback() {
+        super.connectedCallback();
+        if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
+    }
+
+    render() {
+        if (!this.data) return html``;
+        return html`
+      ${sectionHeader(this._t('settings.language.interface_title'))}
+      <div class="flex flex-col px-2 gap-0.5">
+        ${row(
+            this._t('settings.language.ui_language'),
+            this._t('settings.language.ui_language_sub'),
+            select(
+                this.data.language,
+                [
+                    { value: 'en', label: 'English' },
+                    { value: 'es', label: 'Español' },
+                ],
+                (v) => {
+                    setLocale(v as 'en' | 'es');
+                    this.onChange({ language: v });
+                }
+            )
+        )}
+      </div>
+    `;
+    }
+}

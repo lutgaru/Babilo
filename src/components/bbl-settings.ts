@@ -5,13 +5,17 @@
 
 import { LitElement, html } from 'lit';
 import { property, state, customElement } from 'lit/decorators.js';
-import { withI18n, setLocale, getLocale } from '../i18n';
+import { withI18n } from '../i18n';
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { loadSettings, saveSettings } from '../invoke';
 import type { AppSettings } from '../types/babilo';
-import './bbl-mic-panel';
+import './settings/settings-audio';
+import './settings/settings-language';
+import './settings/settings-model';
+import './settings/settings-tts';
+import './settings/settings-appearance';
 
-type SettingsSection = 'audio' | 'language' | 'appearance';
+type SettingsSection = 'audio' | 'language' | 'model' | 'tts' | 'appearance';
 
 @customElement('bbl-settings')
 export class BblSettings extends withI18n(LitElement) {
@@ -55,13 +59,14 @@ export class BblSettings extends withI18n(LitElement) {
         }
     }
 
-    private _close() {
-        this.dispatchEvent(new CustomEvent('settings-close', { bubbles: true, composed: true }));
+    private _updateSection<K extends keyof AppSettings>(section: K, partial: Partial<AppSettings[K]>) {
+        if (!this._settings) return;
+        const current = this._settings[section] ?? {} as AppSettings[K];
+        this._updateSettings({ [section]: { ...current, ...partial } } as Partial<AppSettings>);
     }
 
-    private _onLanguageChange(lang: 'en' | 'es') {
-        setLocale(lang);
-        this._updateSettings({ gui: { ...this._settings?.gui ?? { theme: 'light', language: lang }, language: lang } });
+    private _close() {
+        this.dispatchEvent(new CustomEvent('settings-close', { bubbles: true, composed: true }));
     }
 
     private _navItem(id: SettingsSection, label: string, icon: unknown) {
@@ -78,103 +83,42 @@ export class BblSettings extends withI18n(LitElement) {
     `;
     }
 
-    private _row(label: string, sublabel: string, control: unknown) {
-        return html`
-      <div class="flex items-center justify-between
-                  px-5 py-3.5 rounded-xl gap-4
-                  transition-[background] duration-150 hover:bg-bbl-btn-hover">
-        <div class="flex flex-col gap-0.5 min-w-0">
-          <span class="text-sm text-bbl-text leading-snug">${label}</span>
-          <span class="text-xs text-bbl-text-faint leading-snug truncate">${sublabel}</span>
-        </div>
-        <div class="flex-shrink-0">${control}</div>
-      </div>
-    `;
-    }
+    private _renderSection() {
+        const s = this._settings;
+        if (!s) return html``;
 
-    private _sectionHeader(title: string) {
-        return html`
-      <p class="px-5 pt-5 pb-1 text-[10px] font-semibold uppercase tracking-[0.1em]
-                text-bbl-text-faint">
-        ${title}
-      </p>
-    `;
-    }
-
-    private _audioSection() {
-        const deviceSelect = (id: string) => html`
-      <div class="relative">
-        <bbl-mic-panel slot="mic-panel"></bbl-mic-panel>
-      </div>
-    `;
-
-        const slider = () => html`
-      <div class="w-28">
-        <input type="range" min="0" max="100" value="80"
-          class="appearance-none w-full h-1 rounded bg-bbl-btn-bg border border-bbl-border
-                 outline-none cursor-pointer
-                 [&::-webkit-slider-thumb]:appearance-none
-                 [&::-webkit-slider-thumb]:w-4
-                 [&::-webkit-slider-thumb]:h-4
-                 [&::-webkit-slider-thumb]:rounded-full
-                 [&::-webkit-slider-thumb]:bg-bbl-accent2
-                 [&::-webkit-slider-thumb]:shadow-[0_1px_4px_rgba(0,0,0,0.25)]
-                 [&::-webkit-slider-thumb]:transition-transform
-                 [&::-webkit-slider-thumb]:duration-150
-                 [&::-webkit-slider-thumb]:hover:scale-110">
-      </div>
-    `;
-
-        return html`
-      ${this._sectionHeader(this._t('settings.audio.input_title'))}
-      <div class="flex flex-col px-2 gap-0.5">
-        ${this._row(
-            this._t('settings.audio.microphone'),
-            this._t('settings.audio.microphone_sub'),
-            deviceSelect('mic-select')
-        )}
-      </div>
-
-      ${this._sectionHeader(this._t('settings.audio.output_title'))}
-      <div class="flex flex-col px-2 gap-0.5">
-        ${this._row(
-            this._t('settings.audio.output_volume'),
-            this._t('settings.audio.output_volume_sub'),
-            slider()
-        )}
-      </div>
-    `;
-    }
-
-    private _languageSection() {
-        const langSelect = html`
-      <div class="relative">
-        <select
-          @change=${(e: Event) => this._onLanguageChange((e.target as HTMLSelectElement).value as 'en' | 'es')}
-          class="appearance-none bg-bbl-surface border border-bbl-border text-bbl-text
-                 rounded-bbl-sm px-2.5 py-1.5 text-xs cursor-pointer outline-none
-                 focus:border-bbl-accent2 pr-7">
-          <option value="en" ?selected=${getLocale() === 'en'}>English</option>
-          <option value="es" ?selected=${getLocale() === 'es'}>Español</option>
-        </select>
-        <svg class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2
-                    w-3 h-3 text-bbl-text-muted"
-             viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-    `;
-
-        return html`
-      ${this._sectionHeader(this._t('settings.language.interface_title'))}
-      <div class="flex flex-col px-2 gap-0.5">
-        ${this._row(
-            this._t('settings.language.ui_language'),
-            this._t('settings.language.ui_language_sub'),
-            langSelect
-        )}
-      </div>
-    `;
+        switch (this._section) {
+            case 'audio':
+                return html`
+              <bbl-settings-audio
+                .data=${s.audio}
+                .onChange=${(p: Partial<typeof s.audio>) => this._updateSection('audio', p)}>
+              </bbl-settings-audio>`;
+            case 'language':
+                return html`
+              <bbl-settings-language
+                .data=${s.gui}
+                .onChange=${(p: Partial<typeof s.gui>) => this._updateSection('gui', p)}>
+              </bbl-settings-language>`;
+            case 'model':
+                return html`
+              <bbl-settings-model
+                .data=${s as unknown as Record<string, unknown>}
+                .onChange=${(section: string, p: Record<string, unknown>) => this._updateSection(section as keyof AppSettings, p)}>
+              </bbl-settings-model>`;
+            case 'tts':
+                return html`
+              <bbl-settings-tts
+                .data=${s.tts}
+                .onChange=${(p: Partial<typeof s.tts>) => this._updateSection('tts', p)}>
+              </bbl-settings-tts>`;
+            case 'appearance':
+                return html`
+              <bbl-settings-appearance
+                .data=${s.gui}
+                .onChange=${(p: Partial<typeof s.gui>) => this._updateSection('gui', p)}>
+              </bbl-settings-appearance>`;
+        }
     }
 
     render() {
@@ -192,6 +136,26 @@ export class BblSettings extends withI18n(LitElement) {
         <path d="M6 12c1 1.5 3 3 5 4M12 5l5 14M15.5 13h5"/>
       </svg>`;
 
+        const modelIcon = html`
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 4h16v16H4z"/>
+        <path d="M8 12h4l2-3 2 6 2-3"/>
+      </svg>`;
+
+        const ttsIcon = html`
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 5v14M5 12h14"/>
+      </svg>`;
+
+        const appearanceIcon = html`
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/>
+        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+      </svg>`;
+
         return html`
       <div class="fixed inset-0 z-[100] flex flex-col bg-bbl-bg
                   transition-[transform] duration-[280ms] ease-[cubic-bezier(0.32,0.72,0,1)]
@@ -207,9 +171,12 @@ export class BblSettings extends withI18n(LitElement) {
             ${this._t('settings.title')}
           </span>
 
-          <nav class="flex items-center gap-1">
+          <nav class="flex items-center gap-1 overflow-x-auto max-w-[60vw]">
             ${this._navItem('audio', this._t('settings.nav.audio'), micIcon)}
             ${this._navItem('language', this._t('settings.nav.language'), langIcon)}
+            ${this._navItem('model', this._t('settings.nav.model'), modelIcon)}
+            ${this._navItem('tts', this._t('settings.nav.tts'), ttsIcon)}
+            ${this._navItem('appearance', this._t('settings.nav.appearance'), appearanceIcon)}
           </nav>
 
           <button
@@ -227,8 +194,7 @@ export class BblSettings extends withI18n(LitElement) {
         </header>
 
         <div class="flex-1 overflow-y-auto pb-8">
-          ${this._section === 'audio' ? this._audioSection() : ''}
-          ${this._section === 'language' ? this._languageSection() : ''}
+          ${this._renderSection()}
         </div>
 
       </div>
