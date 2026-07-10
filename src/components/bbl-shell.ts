@@ -134,7 +134,9 @@ export class BblShell extends withI18n(LitElement) {
 
     return html`
       <bbl-config-list
-        @session-started=${this.onSessionStarted}>
+        .settingsOpen=${this.settingsOpen}
+        @session-started=${this.onSessionStarted}
+        @settings-open=${this.onSettingsOpen}>
       </bbl-config-list>
       ${settingsOverlay}
     `;
