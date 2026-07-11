@@ -60,7 +60,7 @@ pub fn run() {
                 .save(&persistent)
                 .expect("Failed to write default settings");
             let app_cfg = persistent.clone().into_app_config();
-            let inference_cfg: config::InferenceConfig = persistent.inference().clone().into();
+            let inference_cfg = persistent.inference().clone();
             let analysis_cfg = app_cfg.analysis.clone();
             let llm_cfg = app_cfg.llm.clone();
 

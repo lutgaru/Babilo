@@ -12,60 +12,53 @@
 
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
-use crate::config::GuiConfig;
 use crate::errors::SettingsError;
+use serde::{Deserialize, Serialize};
 
-use super::{AnalysisConfig, AppConfig, AudioConfig, InferenceConfig, LlmConfig, SeedOption};
+use super::{AnalysisConfig, AppConfig, InferenceConfig, LlmAudioConfig, LlmConfig};
 
 // ---------------------------------------------------------------------------
-// PersistentSettings – full serde copy of all config groups
+// PersistentSettings – full serializable copy of all config groups
 // ---------------------------------------------------------------------------
 
-/// Serializable representation of all application configuration.
-/// Used only for JSON interchange; runtime config remains [`AppConfig`].
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PersistentSettings {
-    pub audio: PersistentAudioConfig,
-    pub llm: PersistentLlmConfig,
-    pub inference: PersistentInferenceConfig,
+    pub audio: LlmAudioConfig,
+    pub llm: LlmConfig,
+    pub inference: InferenceConfig,
     #[serde(default)]
-    pub analysis: PersistentAnalysisConfig,
-    pub tts: Option<PersistentTtsConfig>,
-    pub gui: PersistentGuiConfig,
+    pub analysis: AnalysisConfig,
+    pub tts: Option<crate::config::TtsConfig>,
+    pub gui: crate::config::GuiConfig,
 }
 
 impl PersistentSettings {
-    /// Converts to [`AppConfig`] (inference is dropped here; access it
-    /// via [`Self::inference`] / [`Self::inference_mut`]).
     pub fn into_app_config(self) -> AppConfig {
         AppConfig {
-            audio: self.audio.into(),
-            llm: self.llm.into(),
-            analysis: self.analysis.into(),
-            tts: self.tts.map(PersistentTtsConfig::into_tts),
-            gui: self.gui.into(),
+            audio: self.audio,
+            llm: self.llm,
+            analysis: self.analysis,
+            tts: self.tts,
+            gui: self.gui,
         }
     }
 
-    /// Builds from an [`AppConfig`] plus a separate [`InferenceConfig`]
-    /// (since `AppConfig` does not carry inference).
     pub fn from_app_config(cfg: AppConfig, inference: InferenceConfig) -> Self {
         PersistentSettings {
-            audio: cfg.audio.into(),
-            llm: cfg.llm.into(),
-            inference: inference.into(),
-            analysis: cfg.analysis.into(),
-            tts: cfg.tts.map(PersistentTtsConfig::from_tts),
-            gui: PersistentGuiConfig::from(cfg.gui),
+            audio: cfg.audio,
+            llm: cfg.llm,
+            inference,
+            analysis: cfg.analysis,
+            tts: cfg.tts,
+            gui: cfg.gui,
         }
     }
 
-    pub fn inference(&self) -> &PersistentInferenceConfig {
+    pub fn inference(&self) -> &InferenceConfig {
         &self.inference
     }
 
-    pub fn inference_mut(&mut self) -> &mut PersistentInferenceConfig {
+    pub fn inference_mut(&mut self) -> &mut InferenceConfig {
         &mut self.inference
     }
 }
@@ -73,234 +66,6 @@ impl PersistentSettings {
 impl Default for PersistentSettings {
     fn default() -> Self {
         Self::from_app_config(AppConfig::default(), InferenceConfig::default())
-    }
-}
-
-// -- GUI --------------------------------------------------------------------
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentGuiConfig {
-    pub theme: String,
-    pub language: String,
-}
-
-impl From<PersistentGuiConfig> for GuiConfig {
-    fn from(p: PersistentGuiConfig) -> Self {
-        GuiConfig {
-            theme: p.theme,
-            language: p.language,
-        }
-    }
-}
-
-impl From<GuiConfig> for PersistentGuiConfig {
-    fn from(c: GuiConfig) -> Self {
-        PersistentGuiConfig {
-            theme: c.theme,
-            language: c.language,
-        }
-    }
-}
-
-// -- Audio ------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentAudioConfig {
-    pub sample_rate: u32,
-    pub channels: u16,
-    pub chunk_duration_secs: u32,
-    pub mel_bins: usize,
-    pub window_size: usize,
-    pub hop_size: usize,
-}
-
-impl From<PersistentAudioConfig> for AudioConfig {
-    fn from(p: PersistentAudioConfig) -> Self {
-        AudioConfig {
-            sample_rate: p.sample_rate,
-            channels: p.channels,
-            chunk_duration_secs: p.chunk_duration_secs,
-            mel_bins: p.mel_bins,
-            window_size: p.window_size,
-            hop_size: p.hop_size,
-        }
-    }
-}
-
-impl From<AudioConfig> for PersistentAudioConfig {
-    fn from(c: AudioConfig) -> Self {
-        PersistentAudioConfig {
-            sample_rate: c.sample_rate,
-            channels: c.channels,
-            chunk_duration_secs: c.chunk_duration_secs,
-            mel_bins: c.mel_bins,
-            window_size: c.window_size,
-            hop_size: c.hop_size,
-        }
-    }
-}
-
-// -- LLM --------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentLlmConfig {
-    pub context_size: u32,
-    pub batch_size: u32,
-    pub ubatch_size: u32,
-    pub n_gpu_layers: u32,
-    pub max_output_tokens: usize,
-}
-
-impl From<PersistentLlmConfig> for LlmConfig {
-    fn from(p: PersistentLlmConfig) -> Self {
-        LlmConfig {
-            context_size: p.context_size,
-            batch_size: p.batch_size,
-            ubatch_size: p.ubatch_size,
-            n_gpu_layers: p.n_gpu_layers,
-            max_output_tokens: p.max_output_tokens,
-        }
-    }
-}
-
-impl From<LlmConfig> for PersistentLlmConfig {
-    fn from(c: LlmConfig) -> Self {
-        PersistentLlmConfig {
-            context_size: c.context_size,
-            batch_size: c.batch_size,
-            ubatch_size: c.ubatch_size,
-            n_gpu_layers: c.n_gpu_layers,
-            max_output_tokens: c.max_output_tokens,
-        }
-    }
-}
-
-// -- Inference --------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentInferenceConfig {
-    pub temperature: f32,
-    pub top_p: f32,
-    pub top_k: i32,
-    pub seed_option: SeedOption,
-    pub seed_value: u32,
-}
-
-impl From<PersistentInferenceConfig> for InferenceConfig {
-    fn from(p: PersistentInferenceConfig) -> Self {
-        InferenceConfig {
-            temperature: p.temperature,
-            top_p: p.top_p,
-            top_k: p.top_k,
-            seed_option: p.seed_option,
-            seed_value: p.seed_value,
-        }
-    }
-}
-
-impl From<InferenceConfig> for PersistentInferenceConfig {
-    fn from(c: InferenceConfig) -> Self {
-        PersistentInferenceConfig {
-            temperature: c.temperature,
-            top_p: c.top_p,
-            top_k: c.top_k,
-            seed_option: c.seed_option,
-            seed_value: c.seed_value,
-        }
-    }
-}
-
-// -- Analysis ---------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentAnalysisConfig {
-    pub context_size: u32,
-    pub max_output_tokens: usize,
-    pub temperature: f32,
-    pub top_p: f32,
-    pub top_k: i32,
-    pub seed_option: SeedOption,
-    pub seed_value: u32,
-}
-
-impl Default for PersistentAnalysisConfig {
-    fn default() -> Self {
-        AnalysisConfig::default().into()
-    }
-}
-
-impl From<PersistentAnalysisConfig> for AnalysisConfig {
-    fn from(p: PersistentAnalysisConfig) -> Self {
-        AnalysisConfig {
-            context_size: p.context_size,
-            max_output_tokens: p.max_output_tokens,
-            temperature: p.temperature,
-            top_p: p.top_p,
-            top_k: p.top_k,
-            seed_option: p.seed_option,
-            seed_value: p.seed_value,
-        }
-    }
-}
-
-impl From<AnalysisConfig> for PersistentAnalysisConfig {
-    fn from(c: AnalysisConfig) -> Self {
-        PersistentAnalysisConfig {
-            context_size: c.context_size,
-            max_output_tokens: c.max_output_tokens,
-            temperature: c.temperature,
-            top_p: c.top_p,
-            top_k: c.top_k,
-            seed_option: c.seed_option,
-            seed_value: c.seed_value,
-        }
-    }
-}
-
-// -- TTS --------------------------------------------------------------------
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentAeConfig {
-    pub sample_rate: i32,
-    pub base_chunk_size: i32,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentTtlConfig {
-    pub chunk_compress_factor: i32,
-    pub latent_dim: i32,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PersistentTtsConfig {
-    pub ae: PersistentAeConfig,
-    pub ttl: PersistentTtlConfig,
-}
-
-impl PersistentTtsConfig {
-    fn from_tts(tts: super::TtsConfig) -> Self {
-        PersistentTtsConfig {
-            ae: PersistentAeConfig {
-                sample_rate: tts.ae.sample_rate,
-                base_chunk_size: tts.ae.base_chunk_size,
-            },
-            ttl: PersistentTtlConfig {
-                chunk_compress_factor: tts.ttl.chunk_compress_factor,
-                latent_dim: tts.ttl.latent_dim,
-            },
-        }
-    }
-
-    fn into_tts(self) -> super::TtsConfig {
-        super::TtsConfig {
-            ae: super::AeConfig {
-                sample_rate: self.ae.sample_rate,
-                base_chunk_size: self.ae.base_chunk_size,
-            },
-            ttl: super::TtlConfig {
-                chunk_compress_factor: self.ttl.chunk_compress_factor,
-                latent_dim: self.ttl.latent_dim,
-            },
-        }
     }
 }
 

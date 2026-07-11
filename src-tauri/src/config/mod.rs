@@ -50,7 +50,7 @@ impl LlmAudioConfig {
 }
 
 /// Configuración del modelo LLM
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LlmConfig {
     pub context_size: u32,
     pub batch_size: u32,
@@ -71,7 +71,7 @@ impl Default for LlmConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AnalysisConfig {
     pub context_size: u32,
     pub max_output_tokens: usize,
@@ -97,7 +97,7 @@ impl Default for AnalysisConfig {
 }
 
 /// Configuración del motor TTS
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TtsConfig {
     pub ae: AeConfig,
     pub ttl: TtlConfig,
@@ -109,7 +109,7 @@ pub enum SeedOption {
     Fixed,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InferenceConfig {
     pub temperature: f32,
     pub top_p: f32,
@@ -130,13 +130,13 @@ impl Default for InferenceConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AeConfig {
     pub sample_rate: i32,
     pub base_chunk_size: i32,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuiConfig {
     pub language: String,
     pub theme: String,
@@ -151,7 +151,7 @@ impl Default for GuiConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TtlConfig {
     pub chunk_compress_factor: i32,
     pub latent_dim: i32,
@@ -168,7 +168,7 @@ impl TtsConfig {
 }
 
 /// Configuración global de la aplicación
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppConfig {
     pub audio: LlmAudioConfig,
     pub llm: LlmConfig,
@@ -188,3 +188,4 @@ impl Default for AppConfig {
         }
     }
 }
+
