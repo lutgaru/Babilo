@@ -14,7 +14,7 @@
 use ndarray::{Array2, arr1};
 use realfft::RealFftPlanner;
 use std::f32::consts::PI;
-use crate::config::AudioConfig;
+use crate::config::LlmAudioConfig;
 
 #[allow(dead_code)]
 pub struct MelPreprocessor {
@@ -48,7 +48,7 @@ impl MelPreprocessor {
     }
 
     /// Procesa audio crudo → features para el modelo
-    pub fn process(&self, audio: &[f32], config: &AudioConfig) -> Vec<Array2<f32>> {
+    pub fn process(&self, audio: &[f32], config: &LlmAudioConfig) -> Vec<Array2<f32>> {
         let chunk_samples = config.samples_per_chunk();
         let mut chunks = Vec::new();
         
@@ -64,7 +64,7 @@ impl MelPreprocessor {
     }
 
     /// Convierte un chunk de audio a espectrograma Mel
-    fn audio_to_mel(&self, audio: &[f32], config: &AudioConfig) -> Array2<f32> {
+    fn audio_to_mel(&self, audio: &[f32], config: &LlmAudioConfig) -> Array2<f32> {
         let mut planner = RealFftPlanner::<f32>::new();
         let fft = planner.plan_fft_forward(config.window_size);
         

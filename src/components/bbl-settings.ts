@@ -89,11 +89,7 @@ export class BblSettings extends withI18n(LitElement) {
 
         switch (this._section) {
             case 'audio':
-                return html`
-              <bbl-settings-audio
-                .data=${s.audio}
-                .onChange=${(p: Partial<typeof s.audio>) => this._updateSection('audio', p)}>
-              </bbl-settings-audio>`;
+                return html`<bbl-settings-audio></bbl-settings-audio>`;
             case 'language':
                 return html`
               <bbl-settings-language

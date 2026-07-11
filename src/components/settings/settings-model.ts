@@ -31,6 +31,7 @@ export class BblSettingsModel extends withI18n(LitElement) {
         return html`
       ${this._renderLlm()}
       ${this._renderInference()}
+      ${this._renderAudioProcessing()}
       ${this._renderAnalysis()}
     `;
     }
@@ -86,6 +87,44 @@ export class BblSettingsModel extends withI18n(LitElement) {
         ${row(this._t('settings.inference.top_k'), this._t('settings.inference.top_k_sub'), numberInput(this._num(s, 'top_k'), 1, 100, 1, (v) => this.onChange(s, { top_k: v })))}
         ${row(this._t('settings.inference.seed_option'), this._t('settings.inference.seed_option_sub'), this._seedSelect(s))}
         ${row(this._t('settings.inference.seed_value'), this._t('settings.inference.seed_value_sub'), numberInput(this._num(s, 'seed_value'), 0, 999999, 1, (v) => this.onChange(s, { seed_value: v })))}
+      </div>`;
+    }
+
+    private _renderAudioProcessing() {
+        const s = 'audio';
+        return html`
+      ${sectionHeader(this._t('settings.audio.advanced_title'))}
+      <div class="flex flex-col px-2 gap-0.5">
+        ${row(
+            this._t('settings.audio.sample_rate'),
+            this._t('settings.audio.sample_rate_sub'),
+            numberInput(this._num(s, 'sample_rate'), 8000, 48000, 1000, (v) => this.onChange(s, { sample_rate: v }), 'Hz')
+        )}
+        ${row(
+            this._t('settings.audio.channels'),
+            this._t('settings.audio.channels_sub'),
+            numberInput(this._num(s, 'channels'), 1, 2, 1, (v) => this.onChange(s, { channels: v }))
+        )}
+        ${row(
+            this._t('settings.audio.chunk_duration'),
+            this._t('settings.audio.chunk_duration_sub'),
+            numberInput(this._num(s, 'chunk_duration_secs'), 1, 60, 1, (v) => this.onChange(s, { chunk_duration_secs: v }), 's')
+        )}
+        ${row(
+            this._t('settings.audio.mel_bins'),
+            this._t('settings.audio.mel_bins_sub'),
+            numberInput(this._num(s, 'mel_bins'), 40, 256, 1, (v) => this.onChange(s, { mel_bins: v }))
+        )}
+        ${row(
+            this._t('settings.audio.window_size'),
+            this._t('settings.audio.window_size_sub'),
+            numberInput(this._num(s, 'window_size'), 128, 2048, 32, (v) => this.onChange(s, { window_size: v }))
+        )}
+        ${row(
+            this._t('settings.audio.hop_size'),
+            this._t('settings.audio.hop_size_sub'),
+            numberInput(this._num(s, 'hop_size'), 32, 1024, 16, (v) => this.onChange(s, { hop_size: v }))
+        )}
       </div>`;
     }
 

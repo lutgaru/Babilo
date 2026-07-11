@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 /// Configuración de captura y procesamiento de audio
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct AudioConfig {
+pub struct LlmAudioConfig {
     pub sample_rate: u32,
     pub channels: u16,
     pub chunk_duration_secs: u32,
@@ -25,13 +25,13 @@ pub struct AudioConfig {
     pub hop_size: usize,
 }
 
-impl Default for AudioConfig {
+impl Default for LlmAudioConfig {
     fn default() -> Self {
         Self::gemma4()
     }
 }
 
-impl AudioConfig {
+impl LlmAudioConfig {
     /// Configuración optimizada para Gemma 4: 30s chunks, 16kHz, mono
     pub fn gemma4() -> Self {
         Self {
@@ -170,7 +170,7 @@ impl TtsConfig {
 /// Configuración global de la aplicación
 #[derive(Clone, Debug)]
 pub struct AppConfig {
-    pub audio: AudioConfig,
+    pub audio: LlmAudioConfig,
     pub llm: LlmConfig,
     pub analysis: AnalysisConfig,
     pub tts: Option<TtsConfig>,
@@ -180,7 +180,7 @@ pub struct AppConfig {
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
-            audio: AudioConfig::default(),
+            audio: LlmAudioConfig::default(),
             llm: LlmConfig::default(),
             analysis: AnalysisConfig::default(),
             tts: None,
