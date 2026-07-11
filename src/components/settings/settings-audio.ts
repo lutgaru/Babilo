@@ -1,8 +1,8 @@
 import { LitElement, html } from 'lit';
-import { property, state, customElement } from 'lit/decorators.js';
+import { property, customElement } from 'lit/decorators.js';
 import { withI18n } from '../../i18n';
 import { applyTailwindToShadowRoot } from '../../lib/tailwind-styles';
-import { row, sectionHeader, slider, numberInput } from './settings-truncate';
+import { row, sectionHeader, numberInput } from './settings-truncate';
 import '../bbl-mic-panel';
 import type { AudioSettings } from '../../types/babilo';
 
@@ -10,8 +10,6 @@ import type { AudioSettings } from '../../types/babilo';
 export class BblSettingsAudio extends withI18n(LitElement) {
     @property({ type: Object }) data: AudioSettings | null = null;
     @property({ type: Function }) onChange: (partial: Partial<AudioSettings>) => void = () => {};
-
-    @state() private _volume = 80;
 
     connectedCallback() {
         super.connectedCallback();
@@ -28,16 +26,6 @@ export class BblSettingsAudio extends withI18n(LitElement) {
             this._t('settings.audio.microphone'),
             this._t('settings.audio.microphone_sub'),
             html`<bbl-mic-panel></bbl-mic-panel>`
-        )}
-        ${row(
-            this._t('settings.audio.output_title'),
-            this._t('settings.audio.output_volume_sub'),
-            html`
-              <div class="flex items-center gap-2">
-                ${slider(this._volume, 0, 100, 1, (v) => { this._volume = v; })}
-                <span class="text-xs text-bbl-text-faint w-7 text-right">${this._volume}%</span>
-              </div>
-            `
         )}
       </div>
 
