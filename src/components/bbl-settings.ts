@@ -11,10 +11,9 @@ import { loadSettings, saveSettings } from '../invoke';
 import type { AppSettings } from '../types/babilo';
 import './settings/settings-audio';
 import './settings/settings-model';
-import './settings/settings-tts';
 import './settings/settings-appearance';
 
-type SettingsSection = 'audio' | 'model' | 'tts' | 'appearance';
+type SettingsSection = 'audio' | 'model' | 'appearance';
 
 @customElement('bbl-settings')
 export class BblSettings extends withI18n(LitElement) {
@@ -88,19 +87,17 @@ export class BblSettings extends withI18n(LitElement) {
 
         switch (this._section) {
             case 'audio':
-                return html`<bbl-settings-audio></bbl-settings-audio>`;
+                return html`
+              <bbl-settings-audio
+                .data=${s.tts}
+                .onChange=${(p: Partial<typeof s.tts>) => this._updateSection('tts', p)}>
+              </bbl-settings-audio>`;
             case 'model':
                 return html`
               <bbl-settings-model
                 .data=${s as unknown as Record<string, unknown>}
                 .onChange=${(section: string, p: Record<string, unknown>) => this._updateSection(section as keyof AppSettings, p)}>
               </bbl-settings-model>`;
-            case 'tts':
-                return html`
-              <bbl-settings-tts
-                .data=${s.tts}
-                .onChange=${(p: Partial<typeof s.tts>) => this._updateSection('tts', p)}>
-              </bbl-settings-tts>`;
             case 'appearance':
                 return html`
               <bbl-settings-appearance
@@ -123,12 +120,6 @@ export class BblSettings extends withI18n(LitElement) {
            stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
         <path d="M4 4h16v16H4z"/>
         <path d="M8 12h4l2-3 2 6 2-3"/>
-      </svg>`;
-
-        const ttsIcon = html`
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M11 5v14M5 12h14"/>
       </svg>`;
 
         const appearanceIcon = html`
@@ -156,7 +147,6 @@ export class BblSettings extends withI18n(LitElement) {
           <nav class="flex items-center gap-1 overflow-x-auto max-w-[60vw]">
             ${this._navItem('audio', this._t('settings.nav.audio'), micIcon)}
             ${this._navItem('model', this._t('settings.nav.model'), modelIcon)}
-            ${this._navItem('tts', this._t('settings.nav.tts'), ttsIcon)}
             ${this._navItem('appearance', this._t('settings.nav.appearance'), appearanceIcon)}
           </nav>
 
