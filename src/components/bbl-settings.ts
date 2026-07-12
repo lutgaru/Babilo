@@ -10,12 +10,11 @@ import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
 import { loadSettings, saveSettings } from '../invoke';
 import type { AppSettings } from '../types/babilo';
 import './settings/settings-audio';
-import './settings/settings-language';
 import './settings/settings-model';
 import './settings/settings-tts';
 import './settings/settings-appearance';
 
-type SettingsSection = 'audio' | 'language' | 'model' | 'tts' | 'appearance';
+type SettingsSection = 'audio' | 'model' | 'tts' | 'appearance';
 
 @customElement('bbl-settings')
 export class BblSettings extends withI18n(LitElement) {
@@ -90,12 +89,6 @@ export class BblSettings extends withI18n(LitElement) {
         switch (this._section) {
             case 'audio':
                 return html`<bbl-settings-audio></bbl-settings-audio>`;
-            case 'language':
-                return html`
-              <bbl-settings-language
-                .data=${s.gui}
-                .onChange=${(p: Partial<typeof s.gui>) => this._updateSection('gui', p)}>
-              </bbl-settings-language>`;
             case 'model':
                 return html`
               <bbl-settings-model
@@ -123,13 +116,6 @@ export class BblSettings extends withI18n(LitElement) {
            stroke-width="1.7" stroke-linecap="round">
         <path d="M12 2a4 4 0 0 0-4 4v6a4 4 0 0 0 8 0V6a4 4 0 0 0-4-4z"/>
         <path d="M6 10v2a6 6 0 0 0 12 0v-2"/>
-      </svg>`;
-
-        const langIcon = html`
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M2 5h10M7 2v3M11 5c0 4-2.5 7-5 9"/>
-        <path d="M6 12c1 1.5 3 3 5 4M12 5l5 14M15.5 13h5"/>
       </svg>`;
 
         const modelIcon = html`
@@ -169,7 +155,6 @@ export class BblSettings extends withI18n(LitElement) {
 
           <nav class="flex items-center gap-1 overflow-x-auto max-w-[60vw]">
             ${this._navItem('audio', this._t('settings.nav.audio'), micIcon)}
-            ${this._navItem('language', this._t('settings.nav.language'), langIcon)}
             ${this._navItem('model', this._t('settings.nav.model'), modelIcon)}
             ${this._navItem('tts', this._t('settings.nav.tts'), ttsIcon)}
             ${this._navItem('appearance', this._t('settings.nav.appearance'), appearanceIcon)}
