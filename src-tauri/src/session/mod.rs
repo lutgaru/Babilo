@@ -25,7 +25,7 @@ use crate::{
     modes::{load_mode, ModeConfig},
     schemas::{
         analysis_system_instruction, conversation_system_instruction, AiState, BabiloAnalysis,
-        BabiloEvent, TokenEvent,
+        BabiloEvent, SessionReport, TokenEvent,
     },
     tts::TtsEngine,
 };
@@ -102,6 +102,20 @@ pub struct Session {
     pub scores: Vec<u8>,
     pub hierarchy: PromptHierarchy,
     pub injection: PromptInjectionState,
+    /// Whether the system prompt was injected when building the last turn prompt.
+    pub last_sys_injected: bool,
+    /// Total number of times the system prompt has been injected in this session.
+    pub sys_injection_total: u32,
+}
+
+/// Snapshot of per-turn prompt metadata passed into `run_turn_streaming`.
+/// Captured under the SessionManager lock in commands, before the lock is
+/// dropped and inference runs on a background thread.
+#[derive(Debug, Clone, Copy)]
+pub struct TurnReportMeta {
+    pub turn: u32,
+    pub sys_prompt_injected: bool,
+    pub sys_prompt_injections: u32,
 }
 
 // ─── SessionManager ──────────────────────────────────────────
@@ -175,6 +189,8 @@ impl SessionManager {
             scores: Vec::new(),
             hierarchy,
             injection: PromptInjectionState::default(),
+            last_sys_injected: false,
+            sys_injection_total: 0,
         };
 
         let session_info = build_session_info(session_id, &session.mode, None);
@@ -250,12 +266,49 @@ impl SessionManager {
             .active_session
             .as_mut()
             .ok_or(SessionError::NotInitialized)?;
-        Ok(build_turn_prompt(
+        let (prompt, injected) = build_turn_prompt(
             &session.hierarchy,
             &mut session.injection,
             user_input,
             is_audio,
-        ))
+        );
+        session.last_sys_injected = injected;
+        if injected {
+            session.sys_injection_total += 1;
+        }
+        Ok(prompt)
+    }
+
+    /// Capture the per-turn report metadata for the last built prompt.
+    /// Call right after `get_turn_prompt`, while holding the manager lock.
+    pub fn last_turn_meta(&self) -> AppResult<TurnReportMeta> {
+        let session = self
+            .active_session
+            .as_ref()
+            .ok_or(SessionError::NotInitialized)?;
+        Ok(TurnReportMeta {
+            turn: session.injection.turns_processed,
+            sys_prompt_injected: session.last_sys_injected,
+            sys_prompt_injections: session.sys_injection_total,
+        })
+    }
+
+    fn build_session_report(
+        meta: TurnReportMeta,
+        context_used: u32,
+        context_total: u32,
+        context_percent: f32,
+        context_cleaned: bool,
+    ) -> SessionReport {
+        SessionReport {
+            turn: meta.turn,
+            context_used,
+            context_total,
+            context_percent,
+            sys_prompt_injected: meta.sys_prompt_injected,
+            sys_prompt_injections: meta.sys_prompt_injections,
+            context_cleaned,
+        }
     }
 
     // ── Two-phase inference ──────────────────────────────────
@@ -272,6 +325,7 @@ impl SessionManager {
         audio_raw: Option<Vec<f32>>,
         prompt: String,
         user_input: String,
+        report_meta: TurnReportMeta,
         app: tauri::AppHandle,
     ) {
         let llm_engine = Arc::clone(&self.llm_engine);
@@ -345,6 +399,18 @@ impl SessionManager {
                 emit(BabiloEvent::Error {
                     message: format!("Response generation failed: {}", e),
                 });
+                // Still send a session report so the frontend stays in sync,
+                // even when generation fails after main operations started.
+                let (used, total, percent) = model.context_usage_snapshot();
+                emit(BabiloEvent::SessionReport {
+                    report: Self::build_session_report(
+                        report_meta,
+                        used,
+                        total,
+                        percent,
+                        model.was_context_cleaned(),
+                    ),
+                });
                 ai_state_changed(AiState::Idle);
                 return;
             }
@@ -403,6 +469,20 @@ impl SessionManager {
                     });
                 }
             }
+
+            // ── Session report: always sent after main operations ──
+            // Covers context usage, sys-prompt injection state, and whether
+            // the KV cache was wiped to make room this turn.
+            let (used, total, percent) = model.context_usage_snapshot();
+            emit(BabiloEvent::SessionReport {
+                report: Self::build_session_report(
+                    report_meta,
+                    used,
+                    total,
+                    percent,
+                    model.was_context_cleaned(),
+                ),
+            });
 
             ai_state_changed(AiState::Idle);
         });
@@ -513,7 +593,7 @@ pub fn build_turn_prompt(
     injection: &mut PromptInjectionState,
     user_input: &str,
     is_audio: bool,
-) -> String {
+) -> (String, bool) {
     let marker = llama_cpp_2::mtmd::mtmd_default_marker().to_string();
     let mut prompt = String::new();
 
@@ -521,7 +601,9 @@ pub fn build_turn_prompt(
         prompt.push_str("<bos>");
     }
 
-    if injection.turns_processed == 0 || injection.should_remind_system(SYSTEM_REMINDER_INTERVAL) {
+    let injected =
+        injection.turns_processed == 0 || injection.should_remind_system(SYSTEM_REMINDER_INTERVAL);
+    if injected {
         let system = format!(
             "{}.{}.\n{}",
             hierarchy.mode_prompt.trim(),
@@ -538,5 +620,5 @@ pub fn build_turn_prompt(
     prompt.push_str("<|turn>model\n");
 
     injection.increment();
-    prompt
+    (prompt, injected)
 }

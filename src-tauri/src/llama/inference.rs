@@ -36,6 +36,7 @@ pub struct InferenceState {
 pub struct InferenceEngine {
     model: LlmModel,
     state: InferenceState,
+    last_context_cleared: bool,
 }
 
 impl InferenceEngine {
@@ -43,6 +44,7 @@ impl InferenceEngine {
         Self {
             model,
             state: InferenceState::default(),
+            last_context_cleared: false,
         }
     }
 
@@ -82,7 +84,8 @@ impl InferenceEngine {
 
         let (ctx, mtmd) = self.model.split_ctx_mtmd()?;
 
-        ensure_context_space(ctx, &mut self.state, n_ctx, total_tokens)?;
+        let cleared = ensure_context_space(ctx, &mut self.state, n_ctx, total_tokens)?;
+        self.last_context_cleared = cleared;
 
         let new_n_past = chunks
             .eval_chunks(mtmd, ctx, self.state.n_past, 0, 512, true)
@@ -115,7 +118,8 @@ impl InferenceEngine {
 
         let ctx = self.model.ctx_mut()?;
 
-        ensure_context_space(ctx, &mut self.state, n_ctx, tokens.len())?;
+        let cleared = ensure_context_space(ctx, &mut self.state, n_ctx, tokens.len())?;
+        self.last_context_cleared = cleared;
         decode_tokens(ctx, &mut self.state, &tokens)?;
 
         self.state.system_prompt_evaluated = true;
@@ -226,7 +230,24 @@ impl InferenceEngine {
         self.model.reset_context()?;
         self.model.reset_analysis_context()?;
         self.state = InferenceState::default();
+        self.last_context_cleared = false;
         Ok(())
+    }
+
+    /// Whether the KV cache was wiped to make room in the last response turn.
+    pub fn was_context_cleaned(&self) -> bool {
+        self.last_context_cleared
+    }
+
+    /// Current main-context usage snapshot (used, total, percent).
+    pub fn context_usage_snapshot(&self) -> (u32, u32, f32) {
+        let (used, total) = self.model.context_usage(self.state.n_past);
+        let percent = if total > 0 {
+            used as f32 / total as f32 * 100.0
+        } else {
+            0.0
+        };
+        (used, total, percent)
     }
 
     pub fn state(&self) -> &InferenceState {
@@ -249,14 +270,16 @@ fn ensure_context_space(
     state: &mut InferenceState,
     n_ctx: u32,
     new_tokens: usize,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     const MARGIN: i32 = 256;
     if state.n_past + new_tokens as i32 + MARGIN > n_ctx as i32 {
         ctx.clear_kv_cache();
         state.n_past = 0;
         state.system_prompt_evaluated = false;
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    Ok(())
 }
 
 fn decode_tokens(

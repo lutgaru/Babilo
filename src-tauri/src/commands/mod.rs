@@ -52,22 +52,30 @@ pub async fn start_session(
     state: State<'_, AppState>,
     app: tauri::AppHandle,
 ) -> Result<crate::session::SessionInfo, String> {
-    let (session_info, turn_prompt) = {
+    let (session_info, turn_data) = {
         let mut manager = state.session_manager.lock().map_err(|e| e.to_string())?;
         let info = manager.start_session(&path).map_err(|e| e.to_string())?;
         let should_infer = info.caps.llm_initiates;
-        let prompt = if should_infer {
-            Some(manager.get_turn_prompt("", false).unwrap_or_default())
+        let data = if should_infer {
+            let prompt = manager.get_turn_prompt("", false).unwrap_or_default();
+            let meta = manager.last_turn_meta().unwrap_or(
+                crate::session::TurnReportMeta {
+                    turn: 1,
+                    sys_prompt_injected: true,
+                    sys_prompt_injections: 1,
+                },
+            );
+            Some((prompt, meta))
         } else {
             None
         };
-        (info, prompt)
+        (info, data)
     };
 
-    if let Some(prompt) = turn_prompt {
+    if let Some((prompt, meta)) = turn_data {
         let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
         manager.set_ai_state(AiState::Thinking, Some(&app));
-        manager.run_turn_streaming(None, prompt, String::new(), app);
+        manager.run_turn_streaming(None, prompt, String::new(), meta, app);
     }
 
     Ok(session_info)
@@ -160,8 +168,9 @@ pub async fn stop_and_process_streaming(
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
         let fullprompt = manager.get_turn_prompt(&prompt, true).unwrap_or_default();
+        let meta = manager.last_turn_meta().map_err(|e| e.to_string())?;
         manager.set_ai_state(AiState::Thinking, Some(&app));
-        manager.run_turn_streaming(Some(resampled), fullprompt, user_input, app);
+        manager.run_turn_streaming(Some(resampled), fullprompt, user_input, meta, app);
     }
 
     Ok(())
@@ -178,8 +187,9 @@ pub async fn process_text_streaming(
     {
         let mut manager = manager_arc.lock().map_err(|e| e.to_string())?;
         let fullprompt = manager.get_turn_prompt(&prompt, false).unwrap_or_default();
+        let meta = manager.last_turn_meta().map_err(|e| e.to_string())?;
         manager.set_ai_state(AiState::Thinking, Some(&app));
-        manager.run_turn_streaming(None, fullprompt, user_input, app);
+        manager.run_turn_streaming(None, fullprompt, user_input, meta, app);
     }
 
     Ok(())
@@ -214,21 +224,20 @@ pub fn reset_conversation(state: State<'_, AppState>) -> Result<bool, String> {
     }
 }
 
+/// Legacy polling API kept for debugging.
+/// Prefer the per-turn `SessionReport` event (`BabiloEvent::SessionReport`),
+/// which is emitted automatically after every turn — do not poll this in a loop.
 #[tauri::command]
 pub fn get_context_usage(state: State<'_, AppState>) -> Result<ContextUsage, String> {
     let manager = state.session_manager.lock().map_err(|e| e.to_string())?;
     let engine = manager.llm_engine.lock().map_err(|e| e.to_string())?;
 
     if let Some(ref engine) = *engine {
-        let (used, total) = engine.model().context_usage(engine.state().n_past);
+        let (used, total, percent) = engine.context_usage_snapshot();
         Ok(ContextUsage {
             used,
             total,
-            percent: if total > 0 {
-                used as f32 / total as f32 * 100.0
-            } else {
-                0.0
-            },
+            percent,
         })
     } else {
         Ok(ContextUsage {

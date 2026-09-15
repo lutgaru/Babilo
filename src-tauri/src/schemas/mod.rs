@@ -51,12 +51,24 @@ Rules:
 }
 
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionReport {
+    pub turn: u32,
+    pub context_used: u32,
+    pub context_total: u32,
+    pub context_percent: f32,
+    pub sys_prompt_injected: bool,
+    pub sys_prompt_injections: u32,
+    pub context_cleaned: bool,
+}
+
 #[derive(Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BabiloEvent {
     Response { text: String },
     Analysis { data: BabiloAnalysis },
     Error { message: String },
+    SessionReport { report: SessionReport },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
