@@ -56,13 +56,24 @@ export type AudioDevice = { name: string; id?: string };
 export type AIState = 'idle' | 'listening' | 'thinking' | 'processing' | 'speaking';
 export type Message = { role: 'user' | 'ai'; content: string; timestamp?: number };
 
+export interface SessionReport {
+  turn: number;
+  context_used: number;
+  context_total: number;
+  context_percent: number;
+  sys_prompt_injected: boolean;
+  sys_prompt_injections: number;
+  context_cleaned: boolean;
+}
+
 export type StreamEvent =
   | { type: 'response'; text: string }
   | {
     type: 'analysis';
     data: BabiloAnalysis;
   }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'session_report'; report: SessionReport };
 
 /** Backend-driven AI state event payload — matches Rust AiState enum */
 export type AiStateEvent = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -126,6 +137,8 @@ export interface TtsSettings {
 export interface GuiSettings {
   theme: string;
   language: string;
+  /** Hideable session-report bar (mirrors Rust GuiConfig.show_session_bar) */
+  show_session_bar?: boolean;
 }
 
 export interface AppSettings {

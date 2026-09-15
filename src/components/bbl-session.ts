@@ -10,12 +10,13 @@ import { withI18n } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
   AIState, AiStateEvent, BabiloAnalysis, SessionInfo,
-  SessionSummary, StreamEvent, TranscriptMessage
+  SessionReport, SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
-import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, startSession } from '../invoke';
+import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, startSession, loadSettings } from '../invoke';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
+import './bbl-session-bar';
 import './bbl-mic-panel';
 import './bbl-transcript';
 
@@ -48,6 +49,12 @@ export class BblSession extends withI18n(LitElement) {
   /** Controls the side-panel visibility; open by default */
   @state() transcriptOpen = true;
 
+  /** Latest per-turn session report packet (context %, sys-prompt, cleaned) */
+  @state() sessionReport: SessionReport | null = null;
+
+  /** Visibility of the session-report bar (hideable via Settings → Appearance) */
+  @state() showSessionBar = true;
+
   private _timerInterval: ReturnType<typeof setInterval> | null = null;
   private _unlistenStream: UnlistenFn | null = null;
   private _unlistenAiState: UnlistenFn | null = null;
@@ -66,6 +73,9 @@ export class BblSession extends withI18n(LitElement) {
   connectedCallback() {
     super.connectedCallback();
     if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
+
+    // Load session-bar visibility (hideable by settings)
+    this._loadSessionBarVisibility();
 
     // Listen for backend-driven state changes (source of truth for AI state)
     this._setupAiStateListener();
@@ -87,6 +97,22 @@ export class BblSession extends withI18n(LitElement) {
     this._cleanupStreamListener();
     this._cleanupAiStateListener();
     this.stopTimer();
+  }
+
+  updated(changed: Map<string, unknown>) {
+    // Refresh bar visibility after the settings overlay closes
+    if (changed.has('settingsOpen') && !this.settingsOpen) {
+      this._loadSessionBarVisibility();
+    }
+  }
+
+  private async _loadSessionBarVisibility() {
+    try {
+      const settings = await loadSettings();
+      this.showSessionBar = settings.gui?.show_session_bar ?? true;
+    } catch (e) {
+      console.error('Failed to load session-bar visibility:', e);
+    }
   }
 
   // ── Stream listener management (DRY) ──
@@ -203,6 +229,7 @@ export class BblSession extends withI18n(LitElement) {
       this.score = null;
       this.corrections = [];
       this.nextStepHint = null;
+      this.sessionReport = null;
     } catch (e) {
       console.error('Error resetting context:', e);
     }
@@ -284,6 +311,11 @@ export class BblSession extends withI18n(LitElement) {
         }];
         this.pendingResponse = '';
         console.log('Received analysis:', event.data);
+        break;
+
+      case 'session_report':
+        this.sessionReport = event.report;
+        console.log('Received session report:', event.report);
         break;
 
       case 'error':
@@ -444,6 +476,13 @@ export class BblSession extends withI18n(LitElement) {
           ${this._renderSidePanel()}
 
         </div>
+
+        ${this.showSessionBar ? html`
+          <bbl-session-bar
+            .report=${this.sessionReport}
+            class="flex-shrink-0">
+          </bbl-session-bar>
+        ` : ''}
 
         ${this.renderInputZone()}
 

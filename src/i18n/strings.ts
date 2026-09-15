@@ -150,6 +150,16 @@ export const translations = {
     'settings.appearance.light': 'Light',
     'settings.appearance.dark': 'Dark',
 
+    'settings.session_bar.title': 'Session Bar',
+    'settings.session_bar.show': 'Show session bar',
+    'settings.session_bar.show_sub': 'Display context usage and system-prompt status during sessions',
+    'session_bar.context': 'Context',
+    'session_bar.sys_injected': 'Sys injected',
+    'session_bar.sys_clean': 'Clean',
+    'session_bar.sys_kept': 'Kept',
+    'session_bar.cleaned': 'Cleaned',
+    'session_bar.turn': 'Turn',
+
     'settings.seed.random': 'Random',
     'settings.seed.fixed': 'Fixed',
 
@@ -299,6 +309,16 @@ export const translations = {
     'settings.appearance.theme_sub': 'Elige tema claro u oscuro',
     'settings.appearance.light': 'Claro',
     'settings.appearance.dark': 'Oscuro',
+
+    'settings.session_bar.title': 'Barra de sesión',
+    'settings.session_bar.show': 'Mostrar barra de sesión',
+    'settings.session_bar.show_sub': 'Muestra el uso de contexto y el estado del system-prompt durante las sesiones',
+    'session_bar.context': 'Contexto',
+    'session_bar.sys_injected': 'Sys inyectado',
+    'session_bar.sys_clean': 'Limpio',
+    'session_bar.sys_kept': 'Conservado',
+    'session_bar.cleaned': 'Limpiado',
+    'session_bar.turn': 'Turno',
 
     'settings.seed.random': 'Aleatorio',
     'settings.seed.fixed': 'Fijo',

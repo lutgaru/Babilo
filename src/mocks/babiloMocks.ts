@@ -106,6 +106,26 @@ export const mockSessionSummary = (sessionId: string, modeName: string): Session
     average_score: 78
 });
 
+// 7b. Mock session report (mirrors Rust SessionReport)
+let mockTurn = 0;
+let mockSysInjections = 0;
+export const mockSessionReport = () => {
+    mockTurn += 1;
+    const injected = mockTurn === 1 || mockTurn % 5 === 0;
+    if (injected) mockSysInjections += 1;
+    const cleaned = false;
+    const used = Math.min(4096, 300 + mockTurn * 137);
+    return {
+        turn: mockTurn,
+        context_used: used,
+        context_total: 4096,
+        context_percent: (used / 4096) * 100,
+        sys_prompt_injected: injected,
+        sys_prompt_injections: mockSysInjections,
+        context_cleaned: cleaned,
+    };
+};
+
 // 7. Default Settings (mirrors Rust PersistentSettings::default())
 export const mockSettings: AppSettings = {
     audio: {
@@ -143,6 +163,7 @@ export const mockSettings: AppSettings = {
     gui: {
         theme: 'light',
         language: 'en',
+        show_session_bar: true,
     },
 };
 
@@ -177,4 +198,10 @@ export const simulateRustStream = async (prompt: string): Promise<void> => {
         data: mockAnalysisExamples[0]
     };
     window.dispatchEvent(new CustomEvent('babilo://stream', { detail: { payload: analysisEvent } }));
+
+    const reportEvent: StreamEvent = {
+        type: 'session_report',
+        report: mockSessionReport()
+    };
+    window.dispatchEvent(new CustomEvent('babilo://stream', { detail: { payload: reportEvent } }));
 };

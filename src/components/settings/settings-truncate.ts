@@ -59,6 +59,23 @@ export function slider(value: number, min: number, max: number, step: number, on
     `;
 }
 
+export function toggle(value: boolean, onChange: (v: boolean) => void, label?: string): TemplateResult {
+    return html`
+      <button
+        role="switch"
+        aria-checked="${value}"
+        aria-label="${label ?? 'Toggle'}"
+        @click=${() => onChange(!value)}
+        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-150 cursor-pointer border-none outline-none
+               ${value ? 'bg-bbl-accent2' : 'bg-bbl-btn-bg border border-bbl-border'}">
+        <span
+          class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-150
+                 ${value ? 'translate-x-6' : 'translate-x-1'}">
+        </span>
+      </button>
+    `;
+}
+
 export function select(value: string, options: Array<{ value: string; label: string }>, onChange: (v: string) => void): TemplateResult {
     return html`
       <div class="relative">

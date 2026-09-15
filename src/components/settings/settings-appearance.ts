@@ -2,7 +2,7 @@ import { LitElement, html } from 'lit';
 import { property, customElement } from 'lit/decorators.js';
 import { withI18n, setLocale } from '../../i18n';
 import { applyTailwindToShadowRoot } from '../../lib/tailwind-styles';
-import { row, sectionHeader, select } from './settings-truncate';
+import { row, sectionHeader, select, toggle } from './settings-truncate';
 import type { GuiSettings } from '../../types/babilo';
 
 @customElement('bbl-settings-appearance')
@@ -49,6 +49,19 @@ export class BblSettingsAppearance extends withI18n(LitElement) {
                     setLocale(v as 'en' | 'es');
                     this.onChange({ language: v });
                 }
+            )
+        )}
+      </div>
+
+      ${sectionHeader(this._t('settings.session_bar.title'))}
+      <div class="flex flex-col px-2 gap-0.5">
+        ${row(
+            this._t('settings.session_bar.show'),
+            this._t('settings.session_bar.show_sub'),
+            toggle(
+                this.data.show_session_bar ?? true,
+                (v) => this.onChange({ show_session_bar: v }),
+                this._t('settings.session_bar.show')
             )
         )}
       </div>
