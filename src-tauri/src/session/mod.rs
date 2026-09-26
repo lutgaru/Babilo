@@ -454,6 +454,33 @@ impl SessionManager {
 
                     match result {
                         Ok(data) => {
+                            // ── Audio cache optimization ──────────
+                            // Replace audio embeddings in the main context
+                            // with the transcription so the KV cache does
+                            // not fill up with audio tokens. Runs on the
+                            // main context only; analysis context is reset
+                            // every turn anyway.
+                            if is_audio {
+                                match model.compact_audio_turn(
+                                    &prompt,
+                                    &data.transcription,
+                                    &final_response,
+                                ) {
+                                    Ok(stats) => {
+                                        if stats.compacted {
+                                            eprintln!(
+                                                "♻️ audio compacted: {} → {} (freed {})",
+                                                stats.n_past_before,
+                                                stats.n_past_after,
+                                                stats.tokens_freed
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("⚠️ audio compaction failed: {e}");
+                                    }
+                                }
+                            }
                             emit(BabiloEvent::Analysis { data });
                         }
                         Err(msg) => {

@@ -33,10 +33,27 @@ pub struct InferenceState {
     pub system_prompt_evaluated: bool,
 }
 
+/// Stats returned by `compact_audio_turn`.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AudioCompactionStats {
+    /// KV positions before compaction (== n_past after response generation).
+    pub n_past_before: i32,
+    /// KV positions after compaction.
+    pub n_past_after: i32,
+    /// Tokens freed (before - after, can be 0 if skipped).
+    pub tokens_freed: i32,
+    /// Whether compaction actually ran (false when skipped).
+    pub compacted: bool,
+}
+
 pub struct InferenceEngine {
     model: LlmModel,
     state: InferenceState,
     last_context_cleared: bool,
+    /// Start position (n_past) of the current turn's audio prompt in the
+    /// main context. Set by `infer_audio_streaming`, consumed by
+    /// `compact_audio_turn`. `None` for text turns or after compaction/reset.
+    pending_audio_start: Option<i32>,
 }
 
 impl InferenceEngine {
@@ -45,6 +62,7 @@ impl InferenceEngine {
             model,
             state: InferenceState::default(),
             last_context_cleared: false,
+            pending_audio_start: None,
         }
     }
 
@@ -87,12 +105,18 @@ impl InferenceEngine {
         let cleared = ensure_context_space(ctx, &mut self.state, n_ctx, total_tokens)?;
         self.last_context_cleared = cleared;
 
+        // Track where this audio turn starts in the KV cache so it can be
+        // replaced by its transcription later (see `compact_audio_turn`).
+        // If the context was wiped above, n_past is 0 — still correct.
+        let audio_start = self.state.n_past;
+
         let new_n_past = chunks
             .eval_chunks(mtmd, ctx, self.state.n_past, 0, 512, true)
             .map_err(|e| LlmError::Decode(e.to_string()))?;
 
         self.state.n_past = new_n_past;
         self.state.system_prompt_evaluated = true;
+        self.pending_audio_start = Some(audio_start);
 
         generate_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
 
@@ -123,6 +147,8 @@ impl InferenceEngine {
         decode_tokens(ctx, &mut self.state, &tokens)?;
 
         self.state.system_prompt_evaluated = true;
+        // Text turns need no compaction.
+        self.pending_audio_start = None;
 
         generate_streaming(ctx, &mut self.state, &config, &inference_config, on_token)?;
 
@@ -231,7 +257,99 @@ impl InferenceEngine {
         self.model.reset_analysis_context()?;
         self.state = InferenceState::default();
         self.last_context_cleared = false;
+        self.pending_audio_start = None;
         Ok(())
+    }
+
+    /// Replace the last audio turn's tokens in the main KV cache with its
+    /// transcription (text).
+    ///
+    /// Strategy (truncate + re-decode):
+    /// 1. `original_prompt` is the exact prompt string evaluated in phase 1
+    ///    (contains the MTMD audio marker). Replacing the marker with the
+    ///    transcription preserves the system prompt + turn framing.
+    /// 2. Truncate the KV cache to `pending_audio_start` (drops audio
+    ///    embeddings + the just-generated response).
+    /// 3. Re-decode `compacted_prompt + response_text` as plain text.
+    ///
+    /// Result: history keeps full semantic content (transcription + reply)
+    /// at ~20-60 tokens instead of ~1000+ audio tokens.
+    ///
+    /// No-op (returns `compacted: false`) when there is no pending audio
+    /// turn or the transcription is empty — the audio KV is kept so no
+    /// information is lost.
+    pub fn compact_audio_turn(
+        &mut self,
+        original_prompt: &str,
+        transcription: &str,
+        response_text: &str,
+    ) -> Result<AudioCompactionStats, AppError> {
+        let n_past_before = self.state.n_past;
+        let audio_start = match self.pending_audio_start {
+            Some(pos) => pos,
+            None => {
+                return Ok(AudioCompactionStats {
+                    n_past_before,
+                    n_past_after: n_past_before,
+                    tokens_freed: 0,
+                    compacted: false,
+                });
+            }
+        };
+
+        let transcription = transcription.trim();
+        if transcription.is_empty() {
+            // Cannot replace audio with nothing — keep audio KV.
+            self.pending_audio_start = None;
+            return Ok(AudioCompactionStats {
+                n_past_before,
+                n_past_after: n_past_before,
+                tokens_freed: 0,
+                compacted: false,
+            });
+        }
+
+        let compacted_prompt = build_compacted_prompt(original_prompt, transcription);
+        let mut full_replacement = compacted_prompt;
+        let response_trimmed = response_text.trim();
+        if !response_trimmed.is_empty() {
+            full_replacement.push_str(response_trimmed);
+        }
+
+        // 1. Drop everything from the audio turn start onwards.
+        {
+            let ctx = self.model.ctx_mut()?;
+            // Remove [audio_start, +inf) for all sequences.
+            let _ = ctx.clear_kv_cache_seq(None, Some(audio_start as u32), None);
+        }
+        self.state.n_past = audio_start;
+
+        // 2. Re-decode the text-only replacement.
+        let add_bos = if audio_start == 0 {
+            AddBos::Always
+        } else {
+            AddBos::Never
+        };
+        let tokens = self
+            .model
+            .model()
+            .str_to_token(&full_replacement, add_bos)
+            .map_err(|e| LlmError::Tokenization(e.to_string()))?;
+
+        {
+            let ctx = self.model.ctx_mut()?;
+            decode_tokens(ctx, &mut self.state, &tokens)?;
+        }
+
+        let n_past_after = self.state.n_past;
+        self.pending_audio_start = None;
+
+        Ok(AudioCompactionStats {
+            n_past_before,
+            n_past_after,
+            tokens_freed: (n_past_before - n_past_after).max(0),
+            compacted: true,
+        })
     }
 
     /// Whether the KV cache was wiped to make room in the last response turn.
@@ -410,6 +528,21 @@ impl HasSamplerParams for AnalysisConfig {
 
 // ── Helpers ──────────────────────────────────────────────────
 
+/// Build the text-only replacement for an audio turn prompt.
+///
+/// Replaces the MTMD audio marker with the transcription, preserving the
+/// system prompt and turn framing. If the marker is absent (unexpected),
+/// falls back to appending the transcription.
+pub fn build_compacted_prompt(original_prompt: &str, transcription: &str) -> String {
+    let marker = llama_cpp_2::mtmd::mtmd_default_marker();
+    let transcription = transcription.trim();
+    if original_prompt.contains(marker) {
+        original_prompt.replacen(marker, transcription, 1)
+    } else {
+        format!("{original_prompt}\n{transcription}\n")
+    }
+}
+
 fn resolve_seed(seed_option: SeedOption, seed_value: u32) -> u32 {
     match seed_option {
         SeedOption::Random => SystemTime::now()
@@ -425,5 +558,37 @@ fn bos_flag(state: &InferenceState) -> AddBos {
         AddBos::Always
     } else {
         AddBos::Never
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_compacted_prompt;
+
+    #[test]
+    fn replaces_audio_marker_with_transcription() {
+        let marker = llama_cpp_2::mtmd::mtmd_default_marker();
+        let prompt = format!("<|turn>user\n\n{marker}\n<turn|>\n<|turn>model\n");
+        let out = build_compacted_prompt(&prompt, "  I want to learn English  ");
+        assert!(!out.contains(marker));
+        assert!(out.contains("I want to learn English"));
+        assert!(out.contains("<|turn>user"));
+        assert!(out.contains("<|turn>model"));
+    }
+
+    #[test]
+    fn preserves_system_prompt_when_compacting() {
+        let marker = llama_cpp_2::mtmd::mtmd_default_marker();
+        let prompt = format!("<|turn>system\nBe nice.\n<turn|>\n<|turn>user\n{marker}\n<turn|>\n<|turn>model\n");
+        let out = build_compacted_prompt(&prompt, "hello");
+        assert!(out.contains("Be nice."));
+        assert!(out.contains("hello"));
+        assert!(!out.contains(marker));
+    }
+
+    #[test]
+    fn falls_back_when_no_marker_present() {
+        let out = build_compacted_prompt("<|turn>user\nhi\n<turn|>\n", "hello");
+        assert!(out.contains("hello"));
     }
 }

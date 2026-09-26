@@ -15,7 +15,7 @@ pub mod model;
 pub mod inference;
 
 pub use model::LlmModel;
-pub use inference::{InferenceEngine, InferenceState};
+pub use inference::{AudioCompactionStats, InferenceEngine, InferenceState, build_compacted_prompt};
 
 // Alias para compatibilidad con código existente
 pub type AudioLLM = InferenceEngine;
