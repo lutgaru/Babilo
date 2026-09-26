@@ -2,7 +2,7 @@ import { LitElement, html } from 'lit';
 import { property, customElement } from 'lit/decorators.js';
 import { withI18n } from '../../i18n';
 import { applyTailwindToShadowRoot } from '../../lib/tailwind-styles';
-import { row, sectionHeader, numberInput, select } from './settings-truncate';
+import { row, sectionHeader, numberInput, select, toggle } from './settings-truncate';
 
 @customElement('bbl-settings-model')
 export class BblSettingsModel extends withI18n(LitElement) {
@@ -29,6 +29,7 @@ export class BblSettingsModel extends withI18n(LitElement) {
     render() {
         if (!this.data) return html``;
         return html`
+      ${this._renderConversation()}
       ${this._renderLlm()}
       ${this._renderInference()}
       ${this._renderAudioProcessing()}
@@ -62,6 +63,20 @@ export class BblSettingsModel extends withI18n(LitElement) {
             ],
             (v) => this.onChange(section, { seed_option: v })
         );
+    }
+
+    private _renderConversation() {
+        const sd = this._sd('session');
+        const enabled = (sd['optimize_audio_cache'] as boolean) ?? true;
+        return html`
+      ${sectionHeader(this._t('settings.session.title'))}
+      <div class="flex flex-col px-2 gap-0.5">
+        ${row(
+            this._t('settings.session.optimize_audio_cache'),
+            this._t('settings.session.optimize_audio_cache_sub'),
+            toggle(enabled, (v) => this.onChange('session', { optimize_audio_cache: v }))
+        )}
+      </div>`;
     }
 
     private _renderLlm() {

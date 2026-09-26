@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use crate::errors::SettingsError;
 use serde::{Deserialize, Serialize};
 
-use super::{AnalysisConfig, AppConfig, InferenceConfig, LlmAudioConfig, LlmConfig};
+use super::{AnalysisConfig, AppConfig, InferenceConfig, LlmAudioConfig, LlmConfig, SessionConfig};
 
 // ---------------------------------------------------------------------------
 // PersistentSettings – full serializable copy of all config groups
@@ -30,6 +30,8 @@ pub struct PersistentSettings {
     pub analysis: AnalysisConfig,
     pub tts: Option<crate::config::TtsConfig>,
     pub gui: crate::config::GuiConfig,
+    #[serde(default)]
+    pub session: SessionConfig,
 }
 
 impl PersistentSettings {
@@ -40,6 +42,7 @@ impl PersistentSettings {
             analysis: self.analysis,
             tts: self.tts,
             gui: self.gui,
+            session: self.session,
         }
     }
 
@@ -51,6 +54,7 @@ impl PersistentSettings {
             analysis: cfg.analysis,
             tts: cfg.tts,
             gui: cfg.gui,
+            session: cfg.session,
         }
     }
 

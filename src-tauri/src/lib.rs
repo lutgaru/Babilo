@@ -65,6 +65,8 @@ pub fn run() {
             let llm_cfg = app_cfg.llm.clone();
 
             // Set up global state with loaded configuration
+            let mut session_manager = SessionManager::new();
+            session_manager.set_optimize_audio_cache(app_cfg.session.optimize_audio_cache);
             app.manage(AppState {
                 config: app_cfg,
                 audio_capture: std::sync::Mutex::new(None),
@@ -74,7 +76,7 @@ pub fn run() {
                 ))),
                 sample_rate: std::sync::Mutex::new(16000),
                 preprocessor: audio::MelPreprocessor::new(16000, 128, 512),
-                session_manager: std::sync::Arc::new(std::sync::Mutex::new(SessionManager::new())),
+                session_manager: std::sync::Arc::new(std::sync::Mutex::new(session_manager)),
             });
 
             // Clone app_handle to move safely between threads

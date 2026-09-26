@@ -141,6 +141,11 @@ export interface GuiSettings {
   show_session_bar?: boolean;
 }
 
+export interface SessionSettings {
+  /** Replace audio tokens with transcription each turn (optimize) vs keep full audio (fidelity) */
+  optimize_audio_cache: boolean;
+}
+
 export interface AppSettings {
   audio: AudioSettings;
   llm: LlmSettings;
@@ -148,4 +153,5 @@ export interface AppSettings {
   analysis: AnalysisSettings;
   tts: TtsSettings | null;
   gui: GuiSettings;
+  session: SessionSettings;
 }

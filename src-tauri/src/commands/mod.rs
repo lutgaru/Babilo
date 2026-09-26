@@ -257,9 +257,17 @@ pub fn load_settings() -> Result<PersistentSettings, String> {
 }
 
 #[tauri::command]
-pub fn save_settings(settings: PersistentSettings) -> Result<(), String> {
+pub fn save_settings(
+    settings: PersistentSettings,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let loader = SettingsLoader::new();
-    loader.save(&settings).map_err(|e| e.to_string())
+    loader.save(&settings).map_err(|e| e.to_string())?;
+    // Apply live (no restart): session behavior flag.
+    if let Ok(mut manager) = state.session_manager.lock() {
+        manager.set_optimize_audio_cache(settings.session.optimize_audio_cache);
+    }
+    Ok(())
 }
 
 // ─── Misc ────────────────────────────────────────────────────

@@ -125,6 +125,10 @@ pub struct SessionManager {
     pub llm_engine: Arc<Mutex<Option<InferenceEngine>>>,
     pub tts_engine: Arc<Mutex<Option<TtsEngine>>>,
     ai_state: Arc<Mutex<AiState>>,
+    /// When true, audio embeddings in the main context are replaced by
+    /// their transcription after each turn (optimize conversation).
+    /// When false, full audio tokens are kept (maintain all information).
+    optimize_audio_cache: bool,
 }
 
 impl SessionManager {
@@ -134,7 +138,17 @@ impl SessionManager {
             llm_engine: Arc::new(Mutex::new(None)),
             tts_engine: Arc::new(Mutex::new(None)),
             ai_state: Arc::new(Mutex::new(AiState::Idle)),
+            optimize_audio_cache: true,
         }
+    }
+
+    /// Live-update the audio cache strategy (from settings, no restart needed).
+    pub fn set_optimize_audio_cache(&mut self, value: bool) {
+        self.optimize_audio_cache = value;
+    }
+
+    pub fn optimize_audio_cache(&self) -> bool {
+        self.optimize_audio_cache
     }
 
     pub fn load_engines(&mut self, llm: Option<InferenceEngine>, tts: Option<TtsEngine>) {
@@ -331,6 +345,9 @@ impl SessionManager {
         let llm_engine = Arc::clone(&self.llm_engine);
         let tts_engine = Arc::clone(&self.tts_engine);
         let ai_state = Arc::clone(&self.ai_state);
+        // Snapshot the live setting so the background turn honors the
+        // current toggle without holding the manager lock during inference.
+        let optimize_audio_cache = self.optimize_audio_cache;
 
         let app_for_state = app.clone();
         let ai_state_changed = move |state: AiState| {
@@ -454,13 +471,14 @@ impl SessionManager {
 
                     match result {
                         Ok(data) => {
-                            // ── Audio cache optimization ──────────
+                            // ── Audio cache optimization (optional) ──
                             // Replace audio embeddings in the main context
                             // with the transcription so the KV cache does
                             // not fill up with audio tokens. Runs on the
                             // main context only; analysis context is reset
                             // every turn anyway.
-                            if is_audio {
+                            // Disabled → keep full audio tokens (max fidelity).
+                            if is_audio && optimize_audio_cache {
                                 match model.compact_audio_turn(
                                     &prompt,
                                     &data.transcription,

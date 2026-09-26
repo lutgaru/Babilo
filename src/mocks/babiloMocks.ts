@@ -165,6 +165,9 @@ export const mockSettings: AppSettings = {
         language: 'en',
         show_session_bar: true,
     },
+    session: {
+        optimize_audio_cache: true,
+    },
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

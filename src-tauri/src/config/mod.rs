@@ -174,6 +174,28 @@ impl TtsConfig {
     }
 }
 
+fn default_optimize_audio_cache() -> bool {
+    true
+}
+
+/// Session-level behavior flags (applied live, no restart needed).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SessionConfig {
+    /// When true, audio embeddings in the main context are replaced by
+    /// their transcription after each turn (saves context).
+    /// When false, full audio tokens are kept (max fidelity, fills context faster).
+    #[serde(default = "default_optimize_audio_cache")]
+    pub optimize_audio_cache: bool,
+}
+
+impl Default for SessionConfig {
+    fn default() -> Self {
+        Self {
+            optimize_audio_cache: true,
+        }
+    }
+}
+
 /// Configuración global de la aplicación
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -182,6 +204,8 @@ pub struct AppConfig {
     pub analysis: AnalysisConfig,
     pub tts: Option<TtsConfig>,
     pub gui: GuiConfig,
+    #[serde(default)]
+    pub session: SessionConfig,
 }
 
 impl Default for AppConfig {
@@ -192,6 +216,7 @@ impl Default for AppConfig {
             analysis: AnalysisConfig::default(),
             tts: None,
             gui: GuiConfig::default(),
+            session: SessionConfig::default(),
         }
     }
 }
