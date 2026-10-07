@@ -146,6 +146,17 @@ export interface SessionSettings {
   optimize_audio_cache: boolean;
 }
 
+export type HotkeyMode = 'toggle' | 'push_to_talk';
+
+export interface HotkeySettings {
+  /** Master switch for the keyboard recording shortcut */
+  enabled: boolean;
+  /** 'toggle' = press to start/stop, 'push_to_talk' = hold to record */
+  mode: HotkeyMode;
+  /** KeyboardEvent.code value, e.g. "Space", "KeyM", "F8" */
+  key: string;
+}
+
 export interface AppSettings {
   audio: AudioSettings;
   llm: LlmSettings;
@@ -154,4 +165,5 @@ export interface AppSettings {
   tts: TtsSettings | null;
   gui: GuiSettings;
   session: SessionSettings;
+  hotkey: HotkeySettings;
 }

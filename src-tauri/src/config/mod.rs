@@ -178,6 +178,49 @@ fn default_optimize_audio_cache() -> bool {
     true
 }
 
+/// Recording hotkey behavior mode.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HotkeyMode {
+    /// Press once to start, press again to stop + send.
+    #[default]
+    Toggle,
+    /// Hold the key to record, release to stop + send.
+    PushToTalk,
+}
+
+fn default_hotkey_enabled() -> bool {
+    false
+}
+
+fn default_hotkey_key() -> String {
+    "Space".into()
+}
+
+/// Keyboard shortcut for driving audio recording without clicking the mic.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HotkeyConfig {
+    /// Master switch shown in Settings → Audio.
+    #[serde(default = "default_hotkey_enabled")]
+    pub enabled: bool,
+    /// Toggle vs hold-to-talk.
+    #[serde(default)]
+    pub mode: HotkeyMode,
+    /// `KeyboardEvent.code` value (e.g. "Space", "KeyM", "F8").
+    #[serde(default = "default_hotkey_key")]
+    pub key: String,
+}
+
+impl Default for HotkeyConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_hotkey_enabled(),
+            mode: HotkeyMode::Toggle,
+            key: default_hotkey_key(),
+        }
+    }
+}
+
 /// Session-level behavior flags (applied live, no restart needed).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionConfig {
@@ -206,6 +249,9 @@ pub struct AppConfig {
     pub gui: GuiConfig,
     #[serde(default)]
     pub session: SessionConfig,
+    /// Keyboard hotkey for audio recording (toggle / push-to-talk).
+    #[serde(default)]
+    pub hotkey: HotkeyConfig,
 }
 
 impl Default for AppConfig {
@@ -217,6 +263,7 @@ impl Default for AppConfig {
             tts: None,
             gui: GuiConfig::default(),
             session: SessionConfig::default(),
+            hotkey: HotkeyConfig::default(),
         }
     }
 }

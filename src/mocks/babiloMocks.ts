@@ -168,6 +168,11 @@ export const mockSettings: AppSettings = {
     session: {
         optimize_audio_cache: true,
     },
+    hotkey: {
+        enabled: false,
+        mode: 'toggle',
+        key: 'Space',
+    },
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));

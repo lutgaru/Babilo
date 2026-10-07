@@ -15,7 +15,7 @@ use std::path::PathBuf;
 use crate::errors::SettingsError;
 use serde::{Deserialize, Serialize};
 
-use super::{AnalysisConfig, AppConfig, InferenceConfig, LlmAudioConfig, LlmConfig, SessionConfig};
+use super::{AnalysisConfig, AppConfig, HotkeyConfig, InferenceConfig, LlmAudioConfig, LlmConfig, SessionConfig};
 
 // ---------------------------------------------------------------------------
 // PersistentSettings – full serializable copy of all config groups
@@ -32,6 +32,9 @@ pub struct PersistentSettings {
     pub gui: crate::config::GuiConfig,
     #[serde(default)]
     pub session: SessionConfig,
+    /// Keyboard hotkey for audio recording (toggle / push-to-talk).
+    #[serde(default)]
+    pub hotkey: HotkeyConfig,
 }
 
 impl PersistentSettings {
@@ -43,6 +46,7 @@ impl PersistentSettings {
             tts: self.tts,
             gui: self.gui,
             session: self.session,
+            hotkey: self.hotkey,
         }
     }
 
@@ -55,6 +59,7 @@ impl PersistentSettings {
             tts: cfg.tts,
             gui: cfg.gui,
             session: cfg.session,
+            hotkey: cfg.hotkey,
         }
     }
 

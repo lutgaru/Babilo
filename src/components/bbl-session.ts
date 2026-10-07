@@ -9,10 +9,11 @@ import { property, state, customElement } from 'lit/decorators.js';
 import { withI18n } from '../i18n';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import {
-  AIState, AiStateEvent, BabiloAnalysis, SessionInfo,
+  AIState, AiStateEvent, BabiloAnalysis, HotkeySettings, SessionInfo,
   SessionReport, SessionSummary, StreamEvent, TranscriptMessage
 } from '../types/babilo';
 import { endSession, startListening, stopAndProcessStreaming, processTextStreaming, startSession, loadSettings } from '../invoke';
+import { prettyHotkey } from './settings/settings-audio';
 import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
@@ -55,6 +56,9 @@ export class BblSession extends withI18n(LitElement) {
   /** Visibility of the session-report bar (hideable via Settings → Appearance) */
   @state() showSessionBar = true;
 
+  /** Keyboard recording shortcut (Settings → Audio). Null until loaded. */
+  @state() hotkey: HotkeySettings | null = null;
+
   private _timerInterval: ReturnType<typeof setInterval> | null = null;
   private _unlistenStream: UnlistenFn | null = null;
   private _unlistenAiState: UnlistenFn | null = null;
@@ -68,6 +72,8 @@ export class BblSession extends withI18n(LitElement) {
     this.toggleRecording = this.toggleRecording.bind(this);
     this._onSettingsOpen = this._onSettingsOpen.bind(this);
     this._onResetContext = this._onResetContext.bind(this);
+    this._onHotkeyDown = this._onHotkeyDown.bind(this);
+    this._onHotkeyUp = this._onHotkeyUp.bind(this);
   }
 
   connectedCallback() {
@@ -76,6 +82,10 @@ export class BblSession extends withI18n(LitElement) {
 
     // Load session-bar visibility (hideable by settings)
     this._loadSessionBarVisibility();
+    this._loadHotkey();
+
+    window.addEventListener('keydown', this._onHotkeyDown);
+    window.addEventListener('keyup', this._onHotkeyUp);
 
     // Listen for backend-driven state changes (source of truth for AI state)
     this._setupAiStateListener();
@@ -96,13 +106,16 @@ export class BblSession extends withI18n(LitElement) {
     super.disconnectedCallback();
     this._cleanupStreamListener();
     this._cleanupAiStateListener();
+    window.removeEventListener('keydown', this._onHotkeyDown);
+    window.removeEventListener('keyup', this._onHotkeyUp);
     this.stopTimer();
   }
 
   updated(changed: Map<string, unknown>) {
-    // Refresh bar visibility after the settings overlay closes
+    // Refresh bar visibility + hotkey after the settings overlay closes
     if (changed.has('settingsOpen') && !this.settingsOpen) {
       this._loadSessionBarVisibility();
+      this._loadHotkey();
     }
   }
 
@@ -113,6 +126,58 @@ export class BblSession extends withI18n(LitElement) {
     } catch (e) {
       console.error('Failed to load session-bar visibility:', e);
     }
+  }
+
+  private async _loadHotkey() {
+    try {
+      const settings = await loadSettings();
+      // Older settings files predate the hotkey section — fall back to disabled.
+      this.hotkey = settings.hotkey ?? { enabled: false, mode: 'toggle', key: 'Space' };
+    } catch (e) {
+      console.error('Failed to load hotkey settings:', e);
+    }
+  }
+
+  // ── Keyboard hotkey (Settings → Audio) ──
+  /** True when the event target is an editable field that must keep the keystroke. */
+  private _isTypingTarget(e: KeyboardEvent): boolean {
+    const el = e.target as HTMLElement | null;
+    if (!el || typeof (el as HTMLElement).tagName !== 'string') return false;
+    const tag = (el as HTMLElement).tagName.toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    if ((el as HTMLElement).isContentEditable) return true;
+    return false;
+  }
+
+  /** Shared guard: hotkey enabled, correct key, session accepts audio, not typing. */
+  private _hotkeyApplies(e: KeyboardEvent): boolean {
+    const h = this.hotkey;
+    if (!h?.enabled) return false;
+    if (e.code !== h.key) return false;
+    if (this.settingsOpen) return false;
+    if (e.repeat) return false;
+    if (this._isTypingTarget(e)) return false;
+    if (!this.sessionInfo?.caps.accepts_audio) return false;
+    return true;
+  }
+
+  private _onHotkeyDown(e: KeyboardEvent) {
+    if (!this._hotkeyApplies(e)) return;
+    const h = this.hotkey!;
+    // Space would otherwise scroll or re-trigger the focused mic button.
+    if (e.code === 'Space') e.preventDefault();
+    if (h.mode === 'push_to_talk') {
+      if (!this.recording) void this.startRecording();
+    } else {
+      void this.toggleRecording();
+    }
+  }
+
+  private _onHotkeyUp(e: KeyboardEvent) {
+    const h = this.hotkey;
+    if (!h?.enabled || h.mode !== 'push_to_talk') return;
+    if (e.code !== h.key) return;
+    if (this.recording) void this.stopRecordingAndSend();
   }
 
   // ── Stream listener management (DRY) ──
@@ -244,33 +309,44 @@ export class BblSession extends withI18n(LitElement) {
   }
 
   // ── Recording ──
+  /** Start mic capture. No-op when already recording or the AI is busy. */
+  async startRecording() {
+    if (this.recording) return;
+    if (this.aiState === 'thinking' || this.aiState === 'speaking' || this.aiState === 'processing') return;
+    try {
+      await startListening(this.selectedMic);
+      this.recording = true;
+      this.aiState = 'listening';
+      this.startTimer();
+    } catch (err) {
+      console.error('Error starting mic:', err);
+      this.aiState = 'idle';
+    }
+  }
+
+  /** Stop mic capture and send the audio for processing. No-op when idle. */
+  async stopRecordingAndSend() {
+    if (!this.recording) return;
+    this.aiState = 'thinking';
+    this.recording = false;
+    this.stopTimer();
+
+    // Setup stream listener for backend response
+    this._setupStreamListener();
+
+    try {
+      await stopAndProcessStreaming('');
+    } catch (err) {
+      console.error('Error procesando audio:', err);
+      this.aiState = 'idle';
+    }
+  }
+
   async toggleRecording() {
-    const selectedDevice = this.selectedMic;
-
     if (!this.recording) {
-      try {
-        await startListening(selectedDevice);
-        this.recording = true;
-        this.aiState = 'listening';
-        this.startTimer();
-      } catch (err) {
-        console.error('Error starting mic:', err);
-        this.aiState = 'idle';
-      }
+      await this.startRecording();
     } else {
-      this.aiState = 'thinking';
-      this.recording = false;
-      this.stopTimer();
-
-      // Setup stream listener for backend response
-      this._setupStreamListener();
-
-      try {
-        await stopAndProcessStreaming('');
-      } catch (err) {
-        console.error('Error procesando audio:', err);
-        this.aiState = 'idle';
-      }
+      await this.stopRecordingAndSend();
     }
   }
 
@@ -430,6 +506,7 @@ export class BblSession extends withI18n(LitElement) {
     }
 
     // Audio mode (default) — reuses existing bbl-controls
+    const showHint = !!this.hotkey?.enabled;
     return html`
       <bbl-controls
         ?recording=${this.recording}
@@ -440,6 +517,15 @@ export class BblSession extends withI18n(LitElement) {
         @reset-context=${this._onResetContext}
         class="flex-shrink-0">
       </bbl-controls>
+      ${showHint ? html`
+        <div class="flex-shrink-0 px-4 pb-2 -mt-2 text-center
+                    text-[11px] text-[var(--bbl-text-faint)]">
+          ${prettyHotkey(this.hotkey!.key)} ·
+          ${this.hotkey!.mode === 'push_to_talk'
+              ? this._t('session.hotkey_hint_ptt')
+              : this._t('session.hotkey_hint_toggle')}
+        </div>
+      ` : ''}
     `;
   }
 

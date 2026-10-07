@@ -90,7 +90,9 @@ export class BblSettings extends withI18n(LitElement) {
                 return html`
               <bbl-settings-audio
                 .data=${s.tts}
-                .onChange=${(p: Partial<typeof s.tts>) => this._updateSection('tts', p)}>
+                .onChange=${(p: Partial<typeof s.tts>) => this._updateSection('tts', p)}
+                .hotkey=${s.hotkey ?? null}
+                .onHotkeyChange=${(p: Partial<NonNullable<typeof s.hotkey>>) => this._updateSection('hotkey', p)}>
               </bbl-settings-audio>`;
             case 'model':
                 return html`
