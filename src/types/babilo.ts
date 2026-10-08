@@ -139,6 +139,8 @@ export interface GuiSettings {
   language: string;
   /** Hideable session-report bar (mirrors Rust GuiConfig.show_session_bar) */
   show_session_bar?: boolean;
+  /** Model-response captions overlay (mirrors Rust GuiConfig.show_captions) */
+  show_captions?: boolean;
 }
 
 export interface SessionSettings {

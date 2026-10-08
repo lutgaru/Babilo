@@ -140,12 +140,18 @@ fn default_show_session_bar() -> bool {
     true
 }
 
+fn default_show_captions() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GuiConfig {
     pub language: String,
     pub theme: String,
     #[serde(default = "default_show_session_bar")]
     pub show_session_bar: bool,
+    #[serde(default = "default_show_captions")]
+    pub show_captions: bool,
 }
 
 impl Default for GuiConfig {
@@ -154,6 +160,7 @@ impl Default for GuiConfig {
             language: "en".into(),
             theme: "light".into(),
             show_session_bar: true,
+            show_captions: true,
         }
     }
 }

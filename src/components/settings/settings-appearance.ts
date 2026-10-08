@@ -53,6 +53,19 @@ export class BblSettingsAppearance extends withI18n(LitElement) {
         )}
       </div>
 
+      ${sectionHeader(this._t('settings.captions.title'))}
+      <div class="flex flex-col px-2 gap-0.5">
+        ${row(
+            this._t('settings.captions.show'),
+            this._t('settings.captions.show_sub'),
+            toggle(
+                this.data.show_captions ?? true,
+                (v) => this.onChange({ show_captions: v }),
+                this._t('settings.captions.show')
+            )
+        )}
+      </div>
+
       ${sectionHeader(this._t('settings.session_bar.title'))}
       <div class="flex flex-col px-2 gap-0.5">
         ${row(

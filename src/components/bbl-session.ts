@@ -18,6 +18,7 @@ import './bbl-top-bar';
 import './bbl-stage';
 import './bbl-controls';
 import './bbl-session-bar';
+import './bbl-captions';
 import './bbl-mic-panel';
 import './bbl-transcript';
 
@@ -56,6 +57,9 @@ export class BblSession extends withI18n(LitElement) {
   /** Visibility of the session-report bar (hideable via Settings → Appearance) */
   @state() showSessionBar = true;
 
+  /** Visibility of the model-response captions overlay (Settings → Appearance) */
+  @state() showCaptions = true;
+
   /** Keyboard recording shortcut (Settings → Audio). Null until loaded. */
   @state() hotkey: HotkeySettings | null = null;
 
@@ -93,7 +97,10 @@ export class BblSession extends withI18n(LitElement) {
     // If the mode speaks first, show the opening line immediately
     if (this.sessionInfo.caps.llm_initiates) {
       this.aiState = 'thinking';
-      console.log('Opening line:', this.sessionInfo.opening_line);
+      if (this.sessionInfo.opening_line) {
+        this.response = this.sessionInfo.opening_line;
+        this.pendingResponse = this.sessionInfo.opening_line;
+      }
       // Register stream listener to capture user response events
       this._setupStreamListener();
 
@@ -123,6 +130,7 @@ export class BblSession extends withI18n(LitElement) {
     try {
       const settings = await loadSettings();
       this.showSessionBar = settings.gui?.show_session_bar ?? true;
+      this.showCaptions = settings.gui?.show_captions ?? true;
     } catch (e) {
       console.error('Failed to load session-bar visibility:', e);
     }
@@ -550,12 +558,15 @@ export class BblSession extends withI18n(LitElement) {
         <!-- session-body: flex-row so bbl-stage and the side panel sit side by side -->
         <div class="flex-1 flex flex-row min-h-0 overflow-hidden">
 
-          <main class="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <main class="flex-1 flex flex-col min-h-0 overflow-hidden relative">
             <bbl-stage
               .aiState=${this.aiState}
-              .response=${this.response}
               class="h-full">
             </bbl-stage>
+            <bbl-captions
+              .text=${this.response}
+              .visible=${this.showCaptions}>
+            </bbl-captions>
           </main>
 
           <!-- Side panel pushes bbl-stage left as it opens -->

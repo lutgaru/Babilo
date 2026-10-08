@@ -164,6 +164,7 @@ export const mockSettings: AppSettings = {
         theme: 'light',
         language: 'en',
         show_session_bar: true,
+        show_captions: true,
     },
     session: {
         optimize_audio_cache: true,
