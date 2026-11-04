@@ -50,3 +50,7 @@ ort = { version = "2.0.0-rc.9", features = ["download-binaries"] }
 thiserror = "1.0"
 
 uuid = { version = "1.23.1", features = ["v4"] }
+
+# Linux/BSD desktop integration (GTK client-side titlebar).
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies]
+gtk = { version = "0.18", features = ["v3_24"] }

@@ -13,7 +13,7 @@
     "withGlobalTauri": false,
     "windows": [
       {
-        "title": "babilo-rs",
+        "title": "Babilo",
         "width": 800,
         "height": 600
       }

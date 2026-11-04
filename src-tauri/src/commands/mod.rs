@@ -272,6 +272,13 @@ pub fn save_settings(
 
 // ─── Misc ────────────────────────────────────────────────────
 
+/// Syncs the native window decorations with the app palette. Called by the
+/// frontend whenever the theme is loaded or changed in Settings → Appearance.
+#[tauri::command]
+pub fn set_window_theme(window: tauri::WebviewWindow, theme: String) -> Result<(), String> {
+    crate::platform::set_window_theme(&window, &theme).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)

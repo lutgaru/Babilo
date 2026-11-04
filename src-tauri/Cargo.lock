@@ -241,6 +241,7 @@ version = "0.1.0"
 dependencies = [
  "byteorder",
  "cpal",
+ "gtk",
  "hound",
  "llama-cpp-2",
  "ndarray",

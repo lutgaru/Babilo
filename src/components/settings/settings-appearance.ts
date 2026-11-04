@@ -2,6 +2,7 @@ import { LitElement, html } from 'lit';
 import { property, customElement } from 'lit/decorators.js';
 import { withI18n, setLocale } from '../../i18n';
 import { applyTailwindToShadowRoot } from '../../lib/tailwind-styles';
+import { applyTheme } from '../../lib/theme';
 import { row, sectionHeader, select, toggle } from './settings-truncate';
 import type { GuiSettings } from '../../types/babilo';
 
@@ -29,7 +30,10 @@ export class BblSettingsAppearance extends withI18n(LitElement) {
                     { value: 'light', label: this._t('settings.appearance.light') },
                     { value: 'dark', label: this._t('settings.appearance.dark') },
                 ],
-                (v) => this.onChange({ theme: v })
+                (v) => {
+                    applyTheme(v);
+                    this.onChange({ theme: v });
+                }
             )
         )}
       </div>

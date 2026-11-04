@@ -20,6 +20,7 @@ pub mod config;
 pub mod errors;
 pub mod llama;
 pub mod modes;
+pub mod platform;
 pub mod schemas;
 pub mod session;
 pub mod state;
@@ -46,7 +47,8 @@ pub fn run() {
             commands::get_list_modes,
             commands::process_text_streaming,
             commands::load_settings,
-            commands::save_settings
+            commands::save_settings,
+            commands::set_window_theme
         ])
         .setup(|app| {
             // 1. Ultra-lightweight and instant initializations first
@@ -78,6 +80,14 @@ pub fn run() {
                 preprocessor: audio::MelPreprocessor::new(16000, 128, 512),
                 session_manager: std::sync::Arc::new(std::sync::Mutex::new(session_manager)),
             });
+
+            // Apply the saved theme to the native window chrome (compact GTK
+            // headerbar on Linux/BSD, native titlebar theme elsewhere).
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(err) = platform::setup_window(&window, &persistent.gui.theme) {
+                    eprintln!("⚠️ Failed to configure native window theme: {err}");
+                }
+            }
 
             // Clone app_handle to move safely between threads
             let app_handle = app.handle().clone();

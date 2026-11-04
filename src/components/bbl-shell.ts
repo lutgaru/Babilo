@@ -4,10 +4,12 @@
  */
 
 import { applyTailwindToShadowRoot } from '../lib/tailwind-styles';
+import { applyTheme } from '../lib/theme';
 import { LitElement, html, css } from 'lit';
 import { state, customElement } from 'lit/decorators.js';
-import { withI18n } from '../i18n';
+import { getLocale, setLocale, withI18n } from '../i18n';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { loadSettings } from '../invoke';
 import { AppView, SessionInfo, SessionSummary } from '../types/babilo';
 import './bbl-config-list';
 import './bbl-session';
@@ -35,6 +37,8 @@ export class BblShell extends withI18n(LitElement) {
   async connectedCallback() {
     super.connectedCallback();
     if (this.shadowRoot) applyTailwindToShadowRoot(this.shadowRoot);
+
+    void this._syncPreferences();
 
     const isTauri = !!(window as any).__TAURI_INTERNALS__;
 
@@ -75,6 +79,24 @@ export class BblShell extends withI18n(LitElement) {
     super.disconnectedCallback();
     if (this.unlistenReady) this.unlistenReady();
     if (this.unlistenError) this.unlistenError();
+  }
+
+  /**
+   * Applies persisted GUI preferences (theme + language) once the backend is
+   * reachable. The theme is also applied from localStorage in main.ts to avoid
+   * a flash of the wrong palette; this call makes the backend file the source
+   * of truth.
+   */
+  private async _syncPreferences() {
+    try {
+      const settings = await loadSettings();
+      applyTheme(settings.gui.theme);
+
+      const locale = settings.gui.language === 'es' ? 'es' : 'en';
+      if (locale !== getLocale()) setLocale(locale);
+    } catch (err) {
+      console.error('[Babilo Shell] Failed to apply persisted preferences:', err);
+    }
   }
 
   private onSessionStarted(e: CustomEvent<{ info: SessionInfo; path: string }>) {

@@ -64,3 +64,11 @@ export const saveSettings = async (settings: AppSettings): Promise<void> => {
   console.log('[Babilo Mock] Settings saved:', settings);
 };
 
+/**
+ * Syncs the native window chrome (GTK titlebar on Linux/BSD, native titlebar
+ * on Windows/macOS) with the app theme.
+ */
+export const setWindowTheme = async (theme: 'light' | 'dark'): Promise<void> => {
+  if (isTauri()) return tauriInvoke('set_window_theme', { theme });
+};
+
